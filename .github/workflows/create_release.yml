@@ -1,0 +1,275 @@
+name: Create Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - "production"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  notify-start:
+    if: github.event.pull_request.merged == true
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: "Branch `${{ github.event.pull_request.head.ref }}` merged into `${{ github.event.pull_request.base.ref }}`. Creating release..."
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  extract-version:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      is-prerelease: ${{ steps.check-prerelease.outputs.is-prerelease }}
+    steps:
+      - id: get-version
+        name: Extract version from branch name
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          VERSION=${BRANCH#release/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - id: check-prerelease
+        name: Check if prerelease version
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          if [[ "$VERSION" =~ ^0 || "$VERSION" =~ (alpha|beta|rc) ]]; then
+            echo "is-prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-artifacts:
+    needs: [extract-version]
+    uses: ./.github/workflows/build_artifacts.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  create-release:
+    needs: [extract-version, build-artifacts]
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.create-release.outputs.release_created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag
+        id: create-tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          echo "Creating tag '$VERSION'..."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "refs/tags/$VERSION"
+          echo "tag_created=true" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Validate and prepare release artifacts
+        id: prepare-artifacts
+        run: |
+          # Format version for filenames
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          echo "SAFE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
+
+          echo "🔍 Analyzing artifacts directory structure:"
+          ls -R artifacts/
+
+          echo -e "\n📁 Full paths of all downloaded files:"
+          find artifacts/ -type f
+
+          echo -e "\n✨ Verifying required release files:"
+          FILES=(
+            "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_windows_amd64/neo_cli_${SAFE_VERSION}_windows_amd64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz"
+          )
+
+          for file in "${FILES[@]}"; do
+            if [ ! -f "$file" ] || [ ! -f "${file%/*}/sha256sum.txt" ]; then
+              echo "❌ Required file not found: $file or its checksum"
+              exit 1
+            else
+              echo "✅ Found file: $(ls -lh "$file" | awk '{print $5, $9}')"
+              echo "✅ Found checksum: $(cat "${file%/*}/sha256sum.txt")"
+            fi
+          done
+          echo "🎉 All required files are present and ready for release!"
+
+      - name: Create GitHub release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.extract-version.outputs.version }}
+          name: ${{ needs.extract-version.outputs.version }}
+          body_path: docs/release_notes/${{ needs.extract-version.outputs.version }}.md
+          prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_macos_universal/neo_cli_${{ env.SAFE_VERSION }}_macos_universal.tar.gz
+
+      - name: Set release status
+        id: release-status
+        run: echo "release_created=true" >> $GITHUB_OUTPUT
+
+  update-homebrew:
+    needs: [extract-version, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set safe version
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          echo "SAFE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Extract SHA256 hashes
+        id: extract-hashes
+        run: |
+          # Extract SHA256 hashes for each platform
+          MACOS_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/sha256sum.txt" | cut -d ' ' -f 1)
+          LINUX_AMD64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/sha256sum.txt" | cut -d ' ' -f 1)
+          LINUX_ARM64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/sha256sum.txt" | cut -d ' ' -f 1)
+
+          # Validate that we found all hashes
+          if [ -z "$MACOS_HASH" ] || [ -z "$LINUX_AMD64_HASH" ] || [ -z "$LINUX_ARM64_HASH" ]; then
+            echo "Error: Failed to extract one or more hashes"
+            exit 1
+          fi
+
+          # Set outputs for use in next step
+          echo "macos_hash=$MACOS_HASH" >> $GITHUB_OUTPUT
+          echo "linux_amd64_hash=$LINUX_AMD64_HASH" >> $GITHUB_OUTPUT
+          echo "linux_arm64_hash=$LINUX_ARM64_HASH" >> $GITHUB_OUTPUT
+
+      - name: Checkout Homebrew tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: tvkcompany/homebrew-neo
+          path: homebrew-tap
+          token: ${{ secrets.WORKFLOW_PAT }}
+          sparse-checkout: |
+            Formula/neo.rb
+          sparse-checkout-cone-mode: false
+
+      - name: Update formula
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          SAFE_VERSION="${{ env.SAFE_VERSION }}"
+
+          # Update Formula/neo.rb
+          cat > homebrew-tap/Formula/neo.rb << EOL
+          require_relative "../lib/private_strategy"
+
+          class Neo < Formula
+            desc "Neo CLI"
+            homepage "https://tvk.company"
+            version "$VERSION"
+            license "Proprietary"
+
+            on_macos do
+              url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz",
+                  using: GitHubPrivateRepositoryReleaseDownloadStrategy
+              sha256 "${{ steps.extract-hashes.outputs.macos_hash }}"
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz",
+                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
+                sha256 "${{ steps.extract-hashes.outputs.linux_amd64_hash }}"
+              end
+              
+              if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+                url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz",
+                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
+                sha256 "${{ steps.extract-hashes.outputs.linux_arm64_hash }}"
+              end
+            end
+
+            def install
+              bin.install "neo"
+            end
+          end
+          EOL
+
+      - name: Commit and push changes
+        working-directory: homebrew-tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/neo.rb
+          git commit -m "Neo CLI ${{ needs.extract-version.outputs.version }} release"
+          git push
+
+  merge-into-development:
+    needs: [extract-version, create-release, update-homebrew]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - name: Merge and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge origin/production --no-ff -m "Merged production into development after release ${{ needs.extract-version.outputs.version }}"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push
+
+  notify-result:
+    needs:
+      [extract-version, create-release, merge-into-development, update-homebrew]
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.create-release.result == 'success' && needs.update-homebrew.result == 'success'
+          && format('✅ Successfully released version `{0}`! 🎉', needs.extract-version.outputs.version)
+          || format('❌ Failed to release version `{0}`. Please check the logs.', needs.extract-version.outputs.version)
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  abort-on-failure:
+    needs:
+      [extract-version, create-release, merge-into-development, update-homebrew]
+    if: failure()
+    uses: ./.github/workflows/abort_release.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+      release_branch: ${{ github.event.pull_request.head.ref }}
+      should_abort_release: ${{ needs.create-release.outputs.release_created == 'true' }}
+      should_abort_production: true
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}

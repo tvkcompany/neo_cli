@@ -1,0 +1,35 @@
+name: Cleanup Change Notes
+
+on:
+  pull_request:
+    types: [opened]
+    branches:
+      - "production"
+
+jobs:
+  cleanup:
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Remove change notes
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Remove change notes if they exist
+          if [ -d "docs/dev/change_notes" ] && [ "$(ls -A docs/dev/change_notes 2>/dev/null)" ]; then
+            rm -f docs/dev/change_notes/*
+            git add docs/dev/change_notes
+            git commit -m "Cleaned up change notes"
+            git push
+            echo "::notice::Cleaned up change notes"
+          else
+            echo "::notice::No change notes to clean up"
+          fi

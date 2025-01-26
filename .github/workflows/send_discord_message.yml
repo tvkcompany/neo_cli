@@ -1,0 +1,43 @@
+name: Send Discord Message
+
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+    secrets:
+      webhookUrl:
+        required: true
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare message
+        id: prepare
+        run: |
+          # Escape JSON special characters
+          MESSAGE=$(echo '${{ inputs.message }}' | jq -Rsa .)
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "username=${GITHUB_REPOSITORY##*/} | GitHub Actions" >> $GITHUB_OUTPUT
+
+      - name: Send to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.webhookUrl }}
+        run: |
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -H "Content-Type: application/json" \
+            -d '{
+              "username": "${{ steps.prepare.outputs.username }}",
+              "content": ${{ steps.prepare.outputs.message }}
+            }' \
+            $DISCORD_WEBHOOK)
+
+          STATUS_CODE=$(echo "$RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [[ $STATUS_CODE != 2* ]]; then
+            echo "::error::Failed to send Discord message. Status: $STATUS_CODE"
+            echo "Response: $RESPONSE_BODY"
+            exit 1
+          fi

@@ -1,0 +1,17 @@
+name: neo_cli
+description: The Neo CLI. Your gateway to experiencing Flutter app development with exceptional speed and precision thanks to the Neo framework.
+version: 0.1.5-beta.1
+
+environment:
+  sdk: ^3.6.1
+
+executables:
+  neo: neo_cli
+
+dependencies:
+  args: ^2.6.0
+  path: ^1.8.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0

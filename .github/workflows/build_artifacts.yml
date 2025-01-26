@@ -1,0 +1,162 @@
+name: Build Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: "Version number for the release (e.g. 1.6.5 or 1.7.1-beta.3)"
+    secrets:
+      webhookUrl:
+        required: true
+        description: "Discord webhook URL for notifications"
+
+jobs:
+  notify-start:
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: "🏗️ Starting build for version `${{ inputs.version }}`..."
+    secrets:
+      webhookUrl: ${{ secrets.webhookUrl }}
+
+  build:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux builds (amd64 and arm64)
+          - os: ubuntu-latest
+            arch: amd64
+            platform: linux
+          - os: ubuntu-latest
+            arch: arm64
+            platform: linux
+          # Windows (amd64 only as arm64 not yet fully supported by Dart)
+          - os: windows-latest
+            arch: amd64
+            platform: windows
+          # macOS (universal binary - works on both Intel and Apple Silicon)
+          - os: macos-latest
+            arch: universal
+            platform: macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get SDK version from pubspec.yaml (Unix)
+        if: runner.os != 'Windows'
+        id: sdk-version-unix
+        run: |
+          SDK_VERSION=$(grep "sdk:" pubspec.yaml | sed -E 's/.*\^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get SDK version from pubspec.yaml (Windows)
+        if: runner.os == 'Windows'
+        id: sdk-version-windows
+        run: |
+          $content = Get-Content pubspec.yaml
+          $sdkLine = $content | Select-String -Pattern "sdk:"
+          $version = $sdkLine -replace '.*\^([0-9]+\.[0-9]+\.[0-9]+).*','$1'
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ steps.sdk-version-unix.outputs.version || steps.sdk-version-windows.outputs.version }}
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Set up QEMU for ARM64 builds
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set output filename (Unix)
+        if: runner.os != 'Windows'
+        id: set-filename-unix
+        run: |
+          VERSION="${{ inputs.version }}"
+          # Replace dots with underscores in version for filename safety
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}.exe" >> $GITHUB_OUTPUT
+          else
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set output filename (Windows)
+        if: runner.os == 'Windows'
+        id: set-filename-windows
+        run: |
+          $VERSION = "${{ inputs.version }}"
+          # Replace dots with underscores in version for filename safety
+          $SAFE_VERSION = $VERSION -replace '\.','_'
+          if ("${{ matrix.platform }}" -eq "windows") {
+            # For the executable itself
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}.exe" >> $env:GITHUB_OUTPUT
+            # For the archive name (without .exe)
+            echo "archive_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Build executable (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable /bin/sh -c "dart pub get && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+          else
+            dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          fi
+
+      - name: Build executable (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          # Rename the binary to 'neo'
+          mv "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}" "neo"
+          tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "neo"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          else
+            sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          fi
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # Rename the binary to 'neo.exe'
+          mv "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}" "neo.exe"
+          tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "neo.exe"
+          certutil -hashfile "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" SHA256 | findstr /v "hash" | findstr /v "CertUtil" > sha256sum.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ runner.os == 'Windows' && steps.set-filename-windows.outputs.archive_name || steps.set-filename-unix.outputs.output_name }}
+          path: |
+            ${{ runner.os == 'Windows' && format('{0}.tar.gz', steps.set-filename-windows.outputs.archive_name) || format('{0}.tar.gz', steps.set-filename-unix.outputs.output_name) }}
+            sha256sum.txt
+          retention-days: 1
+
+  notify-result:
+    needs: [build]
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.build.result == 'success'
+          && format('✅ Successfully built artifacts for version `{0}`!', inputs.version)
+          || format('❌ Failed to build artifacts for version `{0}`. Please check the logs.', inputs.version)
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.webhookUrl }}

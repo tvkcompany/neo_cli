@@ -1,0 +1,302 @@
+name: Prepare Release
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches:
+      - production
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+jobs:
+  notify-start:
+    if: startsWith(github.head_ref, 'release/')
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: "PR opened to merge `${{ github.head_ref }}` into `${{ github.base_ref }}`. Preparing release..."
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  validate-version:
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      is_prerelease: ${{ steps.validate.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: validate
+        name: Validate version
+        run: |
+          # Extract version from branch name
+          VERSION="${{ github.head_ref }}"
+          VERSION=${VERSION#release/}
+
+          # Validate version format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: $VERSION. Version must adhere to semantic versioning. Check our internal docs for rules about the release workflow"
+            exit 1
+          fi
+
+          # Get current version from production
+          git fetch origin production --tags
+          CURRENT_VERSION=$(git describe --tags --abbrev=0 origin/production || echo "0.0.0")
+
+          # Parse main version numbers
+          IFS='.' read -r CURRENT_MAJOR CURRENT_MINOR CURRENT_PATCH <<< "${CURRENT_VERSION%-*}"
+          IFS='.' read -r NEW_MAJOR NEW_MINOR NEW_PATCH <<< "${VERSION%-*}"
+
+          # Extract pre-release parts if they exist
+          CURRENT_PRERELEASE="${CURRENT_VERSION#*-}"
+          [ "$CURRENT_PRERELEASE" == "$CURRENT_VERSION" ] && CURRENT_PRERELEASE=""
+
+          NEW_PRERELEASE="${VERSION#*-}"
+          [ "$NEW_PRERELEASE" == "$VERSION" ] && NEW_PRERELEASE=""
+
+          # Function to get pre-release type order (alpha=1, beta=2, rc=3)
+          get_prerelease_order() {
+            case "$1" in
+              "alpha") echo "1" ;;
+              "beta") echo "2" ;;
+              "rc") echo "3" ;;
+              *) echo "0" ;;
+            esac
+          }
+
+          # Validate version number increments
+          VERSION_INCREASED=false
+          if [ "$NEW_MAJOR" -gt "$CURRENT_MAJOR" ]; then
+            # Major version increment: minor and patch must be 0
+            if [ "$NEW_MAJOR" -ne "$((CURRENT_MAJOR + 1))" ]; then
+              echo "::error::Cannot skip major versions (from $CURRENT_MAJOR to $NEW_MAJOR)"
+              exit 1
+            elif [ "$NEW_MINOR" -ne "0" ] || [ "$NEW_PATCH" -ne "0" ]; then
+              echo "::error::When incrementing major version, minor and patch must be 0"
+              exit 1
+            fi
+            VERSION_INCREASED=true
+          elif [ "$NEW_MAJOR" -eq "$CURRENT_MAJOR" ]; then
+            if [ "$NEW_MINOR" -gt "$CURRENT_MINOR" ]; then
+              # Minor version increment: patch must be 0
+              if [ "$NEW_MINOR" -ne "$((CURRENT_MINOR + 1))" ]; then
+                echo "::error::Cannot skip minor versions (from $CURRENT_MINOR to $NEW_MINOR)"
+                exit 1
+              elif [ "$NEW_PATCH" -ne "0" ]; then
+                echo "::error::When incrementing minor version, patch must be 0"
+                exit 1
+              fi
+              VERSION_INCREASED=true
+            elif [ "$NEW_MINOR" -eq "$CURRENT_MINOR" ]; then
+              if [ "$NEW_PATCH" -gt "$CURRENT_PATCH" ]; then
+                # Patch version increment: must be exactly +1
+                if [ "$NEW_PATCH" -ne "$((CURRENT_PATCH + 1))" ]; then
+                  echo "::error::Cannot skip patch versions (from $CURRENT_PATCH to $NEW_PATCH)"
+                  exit 1
+                fi
+                VERSION_INCREASED=true
+              fi
+            fi
+          fi
+
+          # If version increased, validate pre-release if present
+          if [ "$VERSION_INCREASED" = "true" ] && [ -n "$NEW_PRERELEASE" ]; then
+            NEW_PRERELEASE_NUM=$(echo "$NEW_PRERELEASE" | grep -o '[0-9]*$')
+            if [ "$NEW_PRERELEASE_NUM" != "1" ]; then
+              echo "::error::When starting a pre-release version, you must start with number 1"
+              exit 1
+            fi
+          elif [ "$NEW_MAJOR" -eq "$CURRENT_MAJOR" ] && \
+               [ "$NEW_MINOR" -eq "$CURRENT_MINOR" ] && \
+               [ "$NEW_PATCH" -eq "$CURRENT_PATCH" ]; then
+            # If main version numbers are equal, handle pre-release rules
+            if [ -z "$CURRENT_PRERELEASE" ] && [ -n "$NEW_PRERELEASE" ]; then
+              echo "::error::Cannot add pre-release ($NEW_PRERELEASE) to an existing release version ($CURRENT_VERSION)"
+              exit 1
+            elif [ -n "$CURRENT_PRERELEASE" ] && [ -z "$NEW_PRERELEASE" ]; then
+              VERSION_INCREASED=true  # Removing pre-release is allowed (e.g., 1.0.0-beta.1 -> 1.0.0)
+            elif [ -n "$CURRENT_PRERELEASE" ] && [ -n "$NEW_PRERELEASE" ]; then
+              # Extract numeric part and prefix
+              CURRENT_PRERELEASE_NUM=$(echo "$CURRENT_PRERELEASE" | grep -o '[0-9]*$')
+              NEW_PRERELEASE_NUM=$(echo "$NEW_PRERELEASE" | grep -o '[0-9]*$')
+              CURRENT_PRERELEASE_PREFIX="${CURRENT_PRERELEASE%.*}"
+              NEW_PRERELEASE_PREFIX="${NEW_PRERELEASE%.*}"
+
+              # Get order of pre-release types
+              CURRENT_ORDER=$(get_prerelease_order "$CURRENT_PRERELEASE_PREFIX")
+              NEW_ORDER=$(get_prerelease_order "$NEW_PRERELEASE_PREFIX")
+
+              if [ "$NEW_ORDER" -lt "$CURRENT_ORDER" ]; then
+                echo "::error::Cannot move backwards in pre-release type (from $CURRENT_PRERELEASE_PREFIX to $NEW_PRERELEASE_PREFIX)"
+                exit 1
+              elif [ "$NEW_ORDER" -gt "$CURRENT_ORDER" ]; then
+                # Moving to a higher pre-release type (e.g., alpha -> beta)
+                if [ "$NEW_PRERELEASE_NUM" != "1" ]; then
+                  echo "::error::When changing pre-release type, you must start with number 1"
+                  exit 1
+                fi
+                VERSION_INCREASED=true
+              elif [ "$NEW_ORDER" -eq "$CURRENT_ORDER" ]; then
+                # Same pre-release type, number must be sequential
+                if [ "$NEW_PRERELEASE_NUM" -eq "$((CURRENT_PRERELEASE_NUM + 1))" ]; then
+                  VERSION_INCREASED=true
+                else
+                  echo "::error::Pre-release number must increase by exactly 1 (from $CURRENT_PRERELEASE_NUM to $((CURRENT_PRERELEASE_NUM + 1)))"
+                  exit 1
+                fi
+              fi
+            fi
+          fi
+
+          if [ "$VERSION_INCREASED" != "true" ]; then
+            echo "::error::New version ($VERSION) must be greater than current version ($CURRENT_VERSION)"
+            exit 1
+          fi
+
+          # Determine if prerelease
+          if [ -n "$NEW_PRERELEASE" ]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
+
+          # Set outputs
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+
+  prepare-release:
+    needs: validate-version
+    runs-on: ubuntu-latest
+    outputs:
+      version_updated: ${{ steps.prepare-files.outputs.version_updated }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Prepare release files
+        id: prepare-files
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          VERSION="${{ needs.validate-version.outputs.version }}"
+
+          # Update pubspec.yaml
+          if ! sed -i "s|version:.*|version: $VERSION|" pubspec.yaml; then
+            echo "::error::Failed to update version in pubspec.yaml"
+            exit 1
+          fi
+          echo "::notice::Updated version in pubspec.yaml"
+
+          # Update version in constants.dart
+          if ! sed -i "s|static const String version = '[^']*'|static const String version = '$VERSION'|" lib/core/constants.dart; then
+            echo "::error::Failed to update version in constants.dart"
+            exit 1
+          fi
+          echo "::notice::Updated version in constants.dart"
+
+          # Create release notes directories if they don't exist
+          mkdir -p "docs/release_notes"
+          mkdir -p "docs/dev/internal_release_notes"
+
+          # Create release note
+          NOTE_FILE="docs/release_notes/$VERSION.md"
+          if [ ! -f "$NOTE_FILE" ]; then
+            if ! cp .github/templates/release_note_template.md "$NOTE_FILE"; then
+              echo "::error::Failed to create release notes from template"
+              exit 1
+            fi
+            echo "::notice::Created release note file at $NOTE_FILE"
+          else
+            echo "::notice::Release note file already exists at $NOTE_FILE, skipping creation"
+          fi
+
+          # Create internal release note
+          INTERNAL_NOTE_FILE="docs/dev/internal_release_notes/$VERSION.md"
+          if [ ! -f "$INTERNAL_NOTE_FILE" ]; then
+            if ! cp .github/templates/internal_release_note_template.md "$INTERNAL_NOTE_FILE"; then
+              echo "::error::Failed to create internal release notes from template"
+              exit 1
+            fi
+            echo "::notice::Created internal release note file at $INTERNAL_NOTE_FILE"
+          else
+            echo "::notice::Internal release note file already exists at $INTERNAL_NOTE_FILE, skipping creation"
+          fi
+
+          # Set outputs for comment step
+          echo "note_file=$NOTE_FILE" >> $GITHUB_OUTPUT
+          echo "internal_note_file=$INTERNAL_NOTE_FILE" >> $GITHUB_OUTPUT
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Check if there are any changes to commit
+          if git diff --quiet HEAD; then
+            echo "::notice::No changes to commit"
+          else
+            # Commit and push changes
+            git add pubspec.yaml "$NOTE_FILE" "$INTERNAL_NOTE_FILE"
+            git commit -m "Prepared release $VERSION"
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git push
+            echo "::notice::Changes committed and pushed"
+          fi
+
+      - name: Add release notes reminder
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const noteFile = '${{ steps.prepare-files.outputs.note_file }}';
+            const internalNoteFile = '${{ steps.prepare-files.outputs.internal_note_file }}';
+            const version = '${{ needs.validate-version.outputs.version }}';
+
+            const comment = `
+            📝 Release notes have been created for version ${version}!
+
+            Please edit:
+            1. \`${noteFile}\` - User-facing changes
+            2. \`${internalNoteFile}\` - Internal changes
+
+            💡 **Tip**: Check the change notes in \`docs/dev/change_notes/\` to help compile the release notes.
+            These were created for each PR and contain detailed changes.
+
+            > **Note**: Once this PR is merged and the version is released, the change notes from features included in this release will be automatically removed to clean up the change notes folder. Any change notes from features merged after this release branch was created will be preserved for the next release.
+            `;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  notify-result:
+    needs: [validate-version, prepare-release]
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          (needs.validate-version.result == 'success' && needs.prepare-release.result == 'success')
+          && format('✅ Successfully prepared release `{0}`.', needs.validate-version.outputs.version)
+          || format('❌ Failed to prepare release `{0}`. Please check the logs.', needs.validate-version.outputs.version)
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  abort-on-failure:
+    needs: [validate-version, prepare-release]
+    if: failure()
+    uses: ./.github/workflows/abort_release.yml
+    with:
+      version: ${{ needs.validate-version.outputs.version }}
+      release_branch: ${{ github.head_ref }}
+      should_abort_version_bump: ${{ needs.prepare-release.outputs.version_updated == 'true' }}
+      should_abort_production: false
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}

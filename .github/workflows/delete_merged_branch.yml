@@ -1,0 +1,76 @@
+name: Delete Merged Branch
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+    secrets:
+      webhookUrl:
+        required: true
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    outputs:
+      branch-name: ${{ steps.check.outputs.branch-name }}
+    steps:
+      - id: check
+        name: Check branch eligibility
+        run: |
+          BRANCH="${{ inputs.branch || github.head_ref }}"
+          SOURCE="${{ inputs.branch != '' && 'workflow' || 'pull request' }}"
+          echo "Triggered by $SOURCE"
+
+          if [[ ! "$BRANCH" ]]; then
+            echo "::error::No branch name provided"
+            exit 1
+          fi
+
+          if [[ "$BRANCH" == "development" || "$BRANCH" == "production" ]]; then
+            echo "::warning::Protected branch '$BRANCH' will not be deleted"
+            echo "branch-name=" >> $GITHUB_OUTPUT
+          else
+            echo "::notice::Branch '$BRANCH' will be deleted"
+            echo "branch-name=$BRANCH" >> $GITHUB_OUTPUT
+          fi
+
+  notify-start:
+    needs: check-branch
+    if: needs.check-branch.outputs.branch-name != ''
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: "Deleting branch `${{ needs.check-branch.outputs.branch-name }}` due to merge..."
+    secrets:
+      webhookUrl: ${{ github.event_name == 'pull_request' && secrets.DISCORD_WEBHOOK_URL || secrets.webhookUrl }}
+
+  delete-branch:
+    needs: [check-branch, notify-start]
+    if: needs.check-branch.outputs.branch-name != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete branch
+        uses: dawidd6/action-delete-branch@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branches: ${{ needs.check-branch.outputs.branch-name }}
+
+  notify-result:
+    needs: [check-branch, delete-branch]
+    if: needs.check-branch.outputs.branch-name != ''
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.delete-branch.result == 'success'
+          && format('✅ Successfully deleted branch `{0}`.', needs.check-branch.outputs.branch-name)
+          || format('❌ Failed to delete branch `{0}`. Please check the logs.', needs.check-branch.outputs.branch-name)
+        }}
+    secrets:
+      webhookUrl: ${{ github.event_name == 'pull_request' && secrets.DISCORD_WEBHOOK_URL || secrets.webhookUrl }}

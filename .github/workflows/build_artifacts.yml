@@ -1,0 +1,129 @@
+name: Build Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: "Version number for the release (e.g. 1.6.5 or 1.7.1-beta.3)"
+    outputs:
+      artifact_paths:
+        description: "JSON array of artifact paths that were uploaded"
+        value: ${{ jobs.build.outputs.artifact_paths }}
+    secrets:
+      webhookUrl:
+        required: true
+        description: "Discord webhook URL for notifications"
+
+jobs:
+  notify-start:
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: "🏗️ Starting build for version `${{ inputs.version }}`..."
+    secrets:
+      webhookUrl: ${{ secrets.webhookUrl }}
+
+  build:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    outputs:
+      artifact_paths: ${{ steps.set-artifacts.outputs.artifact_paths }}
+    strategy:
+      matrix:
+        include:
+          # Linux builds (amd64 and arm64)
+          - os: ubuntu-latest
+            arch: amd64
+            platform: linux
+          - os: ubuntu-latest
+            arch: arm64
+            platform: linux
+          # Windows (amd64 only as arm64 not yet fully supported by Dart)
+          - os: windows-latest
+            arch: amd64
+            platform: windows
+          # macOS (universal binary - works on both Intel and Apple Silicon)
+          - os: macos-latest
+            arch: universal
+            platform: macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "stable"
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Set up QEMU for ARM64 builds
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set output filename
+        id: set-filename
+        run: |
+          VERSION="${{ inputs.version }}"
+          # Replace dots with underscores in version for filename safety
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}.exe" >> $GITHUB_OUTPUT
+          else
+            echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Build executable
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename.outputs.output_name }}
+          else
+            dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename.outputs.output_name }}
+          fi
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.set-filename.outputs.output_name }}
+          path: ${{ steps.set-filename.outputs.output_name }}
+          retention-days: 1
+
+      - name: Set artifacts output
+        id: set-artifacts
+        if: success() && matrix.os == 'ubuntu-latest' && matrix.arch == 'amd64'
+        run: |
+          VERSION="${{ inputs.version }}"
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          ARTIFACTS=$(cat << EOF
+          {
+            "paths": [
+              "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}",
+              "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}",
+              "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}.exe/neo_cli_windows_amd64_${SAFE_VERSION}.exe",
+              "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}"
+            ]
+          }
+          EOF
+          )
+          echo "artifact_paths=$(echo $ARTIFACTS | jq -c .paths)" >> $GITHUB_OUTPUT
+        shell: bash
+
+  notify-result:
+    needs: [build]
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.build.result == 'success'
+          && format('✅ Successfully built artifacts for version `{0}`!', inputs.version)
+          || format('❌ Failed to build artifacts for version `{0}`. Please check the logs.', inputs.version)
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.webhookUrl }}

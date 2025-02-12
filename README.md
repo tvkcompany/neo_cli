@@ -1,3 +1,3 @@
 # Neo CLI
 
-A simple command-line interface (CLI) tool built with Dart.
+Your gateway to experiencing Flutter app development with exceptional speed and precision thanks to the Neo framework.

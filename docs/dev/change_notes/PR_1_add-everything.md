@@ -2,32 +2,14 @@
 
 # Change Note
 
-This is an example change note.
+All of this was made before I initialized Git so... here it is!
 
 ## New 🚀
 
-- Added `command` command. A nice example command
-
-## Improvements 💪
-
-- Added `example` flag to `command` for more customizability
-
-## Fixes 🐞
-
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+- Added everything
 
 # Internal Change Note
 
-This is an example internal change note
-
 ## Changes 🛠️
 
-- Changed some internal logic
+- Everything

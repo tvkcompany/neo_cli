@@ -1,0 +1,134 @@
+name: Create Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - "production"
+
+jobs:
+  notify-start:
+    if: github.event.pull_request.merged == true
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: "Branch `${{ github.event.pull_request.head.ref }}` merged into `${{ github.event.pull_request.base.ref }}`. Creating release..."
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  extract-version:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      is-prerelease: ${{ steps.check-prerelease.outputs.is-prerelease }}
+    steps:
+      - id: get-version
+        name: Extract version from branch name
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          VERSION=${BRANCH#release/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - id: check-prerelease
+        name: Check if prerelease version
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          if [[ "$VERSION" =~ ^0 || "$VERSION" =~ (alpha|beta|rc) ]]; then
+            echo "is-prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-artifacts:
+    needs: [extract-version]
+    uses: ./.github/workflows/build_artifacts.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  create-release:
+    needs: [extract-version, build-artifacts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_created: ${{ steps.create-release.outputs.release_created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag
+        id: create-tag
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          echo "Creating tag '$VERSION'..."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git push origin "refs/tags/$VERSION"
+          echo "tag_created=true" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.extract-version.outputs.version }}
+          name: ${{ needs.extract-version.outputs.version }}
+          body_path: docs/release_notes/${{ needs.extract-version.outputs.version }}.md
+          prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
+          files: ${{ fromJSON(needs.build-artifacts.outputs.artifact_paths) }}
+
+      - name: Set release status
+        id: release-status
+        run: echo "release_created=true" >> $GITHUB_OUTPUT
+
+  merge-into-development:
+    needs: [extract-version, create-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - name: Merge and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge origin/production --no-ff -m "Merged production into development after release ${{ needs.extract-version.outputs.version }}"
+          git push
+
+  notify-result:
+    needs: [extract-version, create-release, merge-into-development]
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.create-release.result == 'success'
+          && format('✅ Successfully released version `{0}`! 🎉', needs.extract-version.outputs.version)
+          || format('❌ Failed to release version `{0}`. Please check the logs.', needs.extract-version.outputs.version)
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  abort-on-failure:
+    needs: [extract-version, create-release, merge-into-development]
+    if: failure()
+    uses: ./.github/workflows/abort_release.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+      release_branch: ${{ github.event.pull_request.head.ref }}
+      should_abort_release: ${{ needs.create-release.outputs.release_created == 'true' }}
+      should_abort_production: true
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

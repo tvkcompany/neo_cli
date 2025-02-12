@@ -1,0 +1,87 @@
+name: Create Change Note
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches:
+      - development
+
+jobs:
+  create-change-note:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Create change note
+        id: create-note
+        run: |
+          # Create change notes directory if it doesn't exist
+          mkdir -p "docs/dev/change_notes"
+
+          # Get branch name and sanitize it for filename
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          # Replace forward slashes with hyphens for safe filenames
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+
+          # Generate change note filename using PR number and branch name
+          NOTE_FILE="docs/dev/change_notes/PR_${{ github.event.pull_request.number }}_${SAFE_BRANCH_NAME}.md"
+
+          # Create change note from template
+          if ! cp .github/templates/change_note_template.md "$NOTE_FILE"; then
+            echo "::error::Failed to create change note from template"
+            exit 1
+          fi
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push change note
+          git add "$NOTE_FILE"
+          git commit -m "Created change note for PR #${{ github.event.pull_request.number }} ($BRANCH_NAME)"
+          git push origin HEAD:${BRANCH_NAME}
+
+          # Set output for comment step
+          echo "note_file=$NOTE_FILE" >> $GITHUB_OUTPUT
+
+      - name: Add PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const noteFile = '${{ steps.create-note.outputs.note_file }}';
+            const prNumber = context.payload.pull_request.number;
+
+            const comment = `
+            👋 I've created a change note for this PR!
+
+            Please edit \`${noteFile}\` to document your changes. This will help when creating the release notes later.
+
+            Don't forget to update both the user-facing and internal sections!
+            `;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });
+
+  notify-result:
+    needs: create-change-note
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.create-change-note.result == 'success'
+          && format('✅ Created change note for PR #{0} (`{1}`)', github.event.pull_request.number, github.event.pull_request.head.ref)
+          || format('❌ Failed to create change note for PR #{0} (`{1}`). Please check the logs.', github.event.pull_request.number, github.event.pull_request.head.ref)
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

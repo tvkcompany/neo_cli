@@ -1,0 +1,97 @@
+name: Update Additional GitHub Releases
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - production
+
+jobs:
+  update-releases:
+    # Only run on merged PRs from release/* branches
+    if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      updated_versions: ${{ steps.update.outputs.updated_versions }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get release version
+        id: version
+        run: |
+          # Extract version directly from the PR branch name
+          VERSION="${{ github.head_ref }}"
+          VERSION="${VERSION#release/}"
+          echo "Current release version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - uses: tj-actions/changed-files@v44.3.0
+        id: changed
+        with:
+          files: docs/release_notes/*.md
+
+      - name: Update release notes
+        if: steps.changed.outputs.any_changed == 'true'
+        id: update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          echo "Starting release notes update process..."
+          echo "Current release version: $RELEASE_VERSION"
+          echo "Changed files: ${{ steps.changed.outputs.all_changed_files }}"
+
+          UPDATED_VERSIONS=()
+
+          for FILE in ${{ steps.changed.outputs.all_changed_files }}; do
+            VERSION="${FILE##*/}"
+            VERSION="${VERSION%.md}"
+            echo "----------------------------------------"
+            echo "Processing: $FILE (version: $VERSION)"
+            
+            # Skip the version that's being released
+            if [[ "$VERSION" == "$RELEASE_VERSION" ]]; then
+              echo "⏭️ Skipping $VERSION (current release version)"
+              continue
+            fi
+            
+            # Verify the GitHub release exists
+            if ! RELEASE_INFO=$(gh api "/repos/$REPO/releases/tags/$VERSION" --jq '.id' 2>/dev/null); then
+              echo "::warning::Release $VERSION not found, skipping"
+              continue
+            fi
+            
+            echo "📝 Updating release notes for $VERSION"
+            if gh release edit "$VERSION" --notes-file "$FILE"; then
+              UPDATED_VERSIONS+=("$VERSION")
+              echo "✅ Successfully updated release $VERSION"
+            else
+              echo "::error::Failed to update release $VERSION"
+              exit 1
+            fi
+          done
+
+          if [[ ${#UPDATED_VERSIONS[@]} -gt 0 ]]; then
+            echo "updated_versions=${UPDATED_VERSIONS[*]}" >> $GITHUB_OUTPUT
+          fi
+
+  notify-result:
+    needs: update-releases
+    if: always()
+    uses: ./.github/workflows/send_discord_message.yml
+    with:
+      message: |
+        ${{ 
+          needs.update-releases.result == 'success' && needs.update-releases.outputs.updated_versions != ''
+          && format('✅ Successfully updated additional release notes for versions: `{0}`', needs.update-releases.outputs.updated_versions)
+          || needs.update-releases.result == 'success'
+          && '✓ No additional release notes needed updating'
+          || '❌ Failed to update release notes. Please check the logs.'
+        }}
+    secrets:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

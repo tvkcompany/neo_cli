@@ -75,12 +75,37 @@ jobs:
         with:
           path: artifacts
 
-      - name: Debug - List artifacts
+      - name: Validate and prepare release artifacts
+        id: prepare-artifacts
         run: |
-          echo "Contents of artifacts directory:"
+          # Format version for filenames
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          echo "SAFE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
+
+          echo "🔍 Analyzing artifacts directory structure:"
           ls -R artifacts/
-          echo "Full paths of all files:"
+
+          echo -e "\n📁 Full paths of all downloaded files:"
           find artifacts/ -type f
+
+          echo -e "\n✨ Verifying required release files:"
+          FILES=(
+            "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}"
+            "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}"
+            "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}.exe/neo_cli_windows_amd64_${SAFE_VERSION}.exe"
+            "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}"
+          )
+
+          for file in "${FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file not found: $file"
+              exit 1
+            else
+              echo "✅ Found file: $(ls -lh "$file" | awk '{print $5, $9}')"
+            fi
+          done
+          echo "🎉 All required files are present and ready for release!"
 
       - name: Create GitHub release
         id: create-release
@@ -90,7 +115,12 @@ jobs:
           name: ${{ needs.extract-version.outputs.version }}
           body_path: docs/release_notes/${{ needs.extract-version.outputs.version }}.md
           prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
-          files: ${{ join(fromJSON(needs.build-artifacts.outputs.artifact_paths), ' ') }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}
+            artifacts/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}
+            artifacts/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.exe/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.exe
+            artifacts/neo_cli_macos_universal_${{ env.SAFE_VERSION }}/neo_cli_macos_universal_${{ env.SAFE_VERSION }}
 
       - name: Set release status
         id: release-status

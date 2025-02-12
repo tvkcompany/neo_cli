@@ -83,7 +83,7 @@ jobs:
           name: ${{ needs.extract-version.outputs.version }}
           body_path: docs/release_notes/${{ needs.extract-version.outputs.version }}.md
           prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
-          files: ${{ fromJSON(needs.build-artifacts.outputs.artifact_paths) }}
+          files: ${{ join(fromJSON(needs.build-artifacts.outputs.artifact_paths), '\n') }}
 
       - name: Set release status
         id: release-status
@@ -125,6 +125,8 @@ jobs:
     needs: [extract-version, create-release, merge-into-development]
     if: failure()
     uses: ./.github/workflows/abort_release.yml
+    permissions:
+      contents: write
     with:
       version: ${{ needs.extract-version.outputs.version }}
       release_branch: ${{ github.event.pull_request.head.ref }}
@@ -132,3 +134,4 @@ jobs:
       should_abort_production: true
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}

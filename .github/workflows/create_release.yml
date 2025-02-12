@@ -75,6 +75,13 @@ jobs:
         with:
           path: artifacts
 
+      - name: Debug - List artifacts
+        run: |
+          echo "Contents of artifacts directory:"
+          ls -R artifacts/
+          echo "Full paths of all files:"
+          find artifacts/ -type f
+
       - name: Create GitHub release
         id: create-release
         uses: softprops/action-gh-release@v1
@@ -83,7 +90,7 @@ jobs:
           name: ${{ needs.extract-version.outputs.version }}
           body_path: docs/release_notes/${{ needs.extract-version.outputs.version }}.md
           prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
-          files: ${{ join(fromJSON(needs.build-artifacts.outputs.artifact_paths), '\n') }}
+          files: ${{ join(fromJSON(needs.build-artifacts.outputs.artifact_paths), ' ') }}
 
       - name: Set release status
         id: release-status

@@ -51,14 +51,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get SDK version constraint from pubspec.yaml
+      - name: Get SDK version from pubspec.yaml
         id: sdk-version
         run: |
-          # Get the major version from the constraint (e.g. "3" from "^3.6.1")
-          MAJOR_VERSION=$(grep "sdk:" pubspec.yaml | sed -E 's/.*\^([0-9]+).*/\1/')
-          # Use the next major version minus 0.0.1 to get the latest compatible version
-          NEXT_MAJOR=$((MAJOR_VERSION + 1))
-          echo "version=<$NEXT_MAJOR.0.0" >> $GITHUB_OUTPUT
+          # Extract the exact version number without the caret
+          SDK_VERSION=$(grep "sdk:" pubspec.yaml | sed -E 's/.*\^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Setup Dart SDK
@@ -67,7 +65,16 @@ jobs:
           sdk: ${{ steps.sdk-version.outputs.version }}
 
       - name: Install dependencies
-        run: dart pub get
+        run: |
+          for i in {1..3}; do
+            if [ "${{ matrix.platform }}" = "windows" ]; then
+              dart pub get && break || sleep 5
+            else
+              dart pub get && break || sleep 5
+            fi
+          done
+        shell: ${{ matrix.platform == 'windows' && 'cmd' || 'bash' }}
+        timeout-minutes: 5
 
       - name: Set up QEMU for ARM64 builds
         if: matrix.arch == 'arm64'
@@ -91,11 +98,14 @@ jobs:
       - name: Build executable
         run: |
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename.outputs.output_name }}
+            docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable /bin/sh -c "dart pub get && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename.outputs.output_name }}"
+          elif [ "${{ matrix.platform }}" = "windows" ]; then
+            dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename.outputs.output_name }}
           else
             dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename.outputs.output_name }}
           fi
-        shell: bash
+        shell: ${{ matrix.platform == 'windows' && 'cmd' || 'bash' }}
+        timeout-minutes: 5
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

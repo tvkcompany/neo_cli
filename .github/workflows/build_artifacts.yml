@@ -51,10 +51,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get SDK version constraint from pubspec.yaml
+        id: sdk-version
+        run: |
+          # Get the major version from the constraint (e.g. "3" from "^3.6.1")
+          MAJOR_VERSION=$(grep "sdk:" pubspec.yaml | sed -E 's/.*\^([0-9]+).*/\1/')
+          # Use the next major version minus 0.0.1 to get the latest compatible version
+          NEXT_MAJOR=$((MAJOR_VERSION + 1))
+          echo "version=<$NEXT_MAJOR.0.0" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Setup Dart SDK
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: "stable"
+          sdk: ${{ steps.sdk-version.outputs.version }}
 
       - name: Install dependencies
         run: dart pub get

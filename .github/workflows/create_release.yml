@@ -125,6 +125,8 @@ jobs:
     needs: [extract-version, create-release, merge-into-development]
     if: failure()
     uses: ./.github/workflows/abort_release.yml
+    permissions:
+      contents: write
     with:
       version: ${{ needs.extract-version.outputs.version }}
       release_branch: ${{ github.event.pull_request.head.ref }}

@@ -91,10 +91,11 @@ jobs:
 
           echo -e "\n✨ Verifying required release files:"
           FILES=(
-            "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}"
-            "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}"
-            "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}.exe/neo_cli_windows_amd64_${SAFE_VERSION}.exe"
-            "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}"
+            "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}.tar.gz"
+            "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}.tar.gz"
+            "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}/neo_cli_windows_amd64_${SAFE_VERSION}.tar.gz"
+            "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}.tar.gz"
+            "artifacts/neo_cli_${VERSION}_checksums.txt"
           )
 
           for file in "${FILES[@]}"; do
@@ -117,10 +118,11 @@ jobs:
           prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
           fail_on_unmatched_files: true
           files: |
-            artifacts/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}
-            artifacts/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}
-            artifacts/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.exe/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.exe
-            artifacts/neo_cli_macos_universal_${{ env.SAFE_VERSION }}/neo_cli_macos_universal_${{ env.SAFE_VERSION }}
+            artifacts/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}.tar.gz
+            artifacts/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}.tar.gz
+            artifacts/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.tar.gz
+            artifacts/neo_cli_macos_universal_${{ env.SAFE_VERSION }}/neo_cli_macos_universal_${{ env.SAFE_VERSION }}.tar.gz
+            artifacts/neo_cli_${{ needs.extract-version.outputs.version }}_checksums.txt
 
       - name: Set release status
         id: release-status

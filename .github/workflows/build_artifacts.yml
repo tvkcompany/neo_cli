@@ -96,7 +96,10 @@ jobs:
           # Replace dots with underscores in version for filename safety
           $SAFE_VERSION = $VERSION -replace '\.','_'
           if ("${{ matrix.platform }}" -eq "windows") {
+            # For the executable itself
             echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}.exe" >> $env:GITHUB_OUTPUT
+            # For the archive name (without .exe)
+            echo "archive_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $env:GITHUB_OUTPUT
           } else {
             echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $env:GITHUB_OUTPUT
           }
@@ -115,11 +118,31 @@ jobs:
         run: |
           dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
 
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+
+      - name: Create checksums file
+        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'amd64'
+        run: |
+          echo "# neo_cli ${{ inputs.version }} checksums" > neo_cli_${{ inputs.version }}_checksums.txt
+          echo "# Generated on $(date -u)" >> neo_cli_${{ inputs.version }}_checksums.txt
+          echo "" >> neo_cli_${{ inputs.version }}_checksums.txt
+          sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" >> neo_cli_${{ inputs.version }}_checksums.txt
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
-          path: ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          path: |
+            ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}*
+            neo_cli_${{ inputs.version }}_checksums.txt
           retention-days: 1
 
   notify-result:

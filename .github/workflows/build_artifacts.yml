@@ -96,7 +96,10 @@ jobs:
           # Replace dots with underscores in version for filename safety
           $SAFE_VERSION = $VERSION -replace '\.','_'
           if ("${{ matrix.platform }}" -eq "windows") {
+            # For the executable itself
             echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}.exe" >> $env:GITHUB_OUTPUT
+            # For the archive name (without .exe)
+            echo "archive_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $env:GITHUB_OUTPUT
           } else {
             echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $env:GITHUB_OUTPUT
           }
@@ -115,11 +118,29 @@ jobs:
         run: |
           dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
 
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          else
+            sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          fi
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+          certutil -hashfile "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" SHA256 | findstr /v "hash" | findstr /v "CertUtil" > sha256sum.txt
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
-          path: ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          name: ${{ runner.os == 'Windows' && steps.set-filename-windows.outputs.archive_name || steps.set-filename-unix.outputs.output_name }}
+          path: |
+            ${{ runner.os == 'Windows' && format('{0}.tar.gz', steps.set-filename-windows.outputs.archive_name) || format('{0}.tar.gz', steps.set-filename-unix.outputs.output_name) }}
+            sha256sum.txt
           retention-days: 1
 
   notify-result:

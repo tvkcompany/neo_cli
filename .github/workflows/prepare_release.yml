@@ -190,7 +190,7 @@ jobs:
           echo "::notice::Updated version in pubspec.yaml"
 
           # Update version in constants.dart
-          if ! sed -i "s|static const String version = '[^']*'|static const String version = '$VERSION'|" lib/core/constants.dart; then
+          if ! sed -i "s|static const String version = \"[^\"]*\"|static const String version = \"$VERSION\"|" lib/core/constants.dart; then
             echo "::error::Failed to update version in constants.dart"
             exit 1
           fi

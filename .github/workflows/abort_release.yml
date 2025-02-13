@@ -45,6 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Delete GitHub Release and Tag
         uses: actions/github-script@v7
@@ -84,8 +85,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.release_branch }}
+          persist-credentials: false
 
       - name: Revert version changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -94,6 +98,7 @@ jobs:
           COMMIT_SHA=$(git log --grep="Prepared release ${{ inputs.version }}" --format="%H")
           if [ ! -z "$COMMIT_SHA" ]; then
             git revert --no-edit "$COMMIT_SHA"
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push
             echo "Reverted version bump commit"
           else
@@ -108,6 +113,7 @@ jobs:
         with:
           ref: production
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Reset production branch
         env:
@@ -121,6 +127,7 @@ jobs:
           if [ ! -z "$MERGE_SHA" ]; then
             PARENT_SHA=$(git rev-parse "$MERGE_SHA^1")
             git reset --hard "$PARENT_SHA"
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push --force
             echo "Reset production branch to before merge"
           else
@@ -133,8 +140,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Restore release branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -143,6 +154,7 @@ jobs:
           if ! git ls-remote --heads origin ${{ inputs.release_branch }} | grep -q .; then
             # Recreate the branch from the last known state
             git checkout -b ${{ inputs.release_branch }} origin/development
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push origin ${{ inputs.release_branch }}
             echo "Restored release branch"
           else

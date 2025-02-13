@@ -63,8 +63,6 @@ jobs:
 
       - name: Create and push tag
         id: create-tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           VERSION="${{ needs.extract-version.outputs.version }}"
           echo "Creating tag '$VERSION'..."
@@ -171,7 +169,6 @@ jobs:
         with:
           repository: tvkcompany/homebrew-neo
           path: homebrew-tap
-          token: ${{ secrets.WORKFLOW_PAT }}
           sparse-checkout: |
             Formula/neo.rb
           sparse-checkout-cone-mode: false
@@ -236,8 +233,6 @@ jobs:
           fetch-depth: 0
 
       - name: Merge and push changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -259,17 +254,3 @@ jobs:
         }}
     secrets:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-  abort-on-failure:
-    needs:
-      [extract-version, create-release, merge-into-development, update-homebrew]
-    if: failure()
-    uses: ./.github/workflows/abort_release.yml
-    with:
-      version: ${{ needs.extract-version.outputs.version }}
-      release_branch: ${{ github.event.pull_request.head.ref }}
-      should_abort_release: ${{ needs.create-release.outputs.release_created == 'true' }}
-      should_abort_production: true
-    secrets:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}

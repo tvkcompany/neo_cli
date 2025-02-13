@@ -6,6 +6,10 @@ on:
     branches:
       - "production"
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   notify-start:
     if: github.event.pull_request.merged == true
@@ -50,8 +54,6 @@ jobs:
   create-release:
     needs: [extract-version, build-artifacts]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
       release_created: ${{ steps.create-release.outputs.release_created }}
     steps:
@@ -61,12 +63,15 @@ jobs:
 
       - name: Create and push tag
         id: create-tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           VERSION="${{ needs.extract-version.outputs.version }}"
           echo "Creating tag '$VERSION'..."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "$VERSION"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin "refs/tags/$VERSION"
           echo "tag_created=true" >> $GITHUB_OUTPUT
 
@@ -95,7 +100,7 @@ jobs:
             "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}.tar.gz"
             "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}/neo_cli_windows_amd64_${SAFE_VERSION}.tar.gz"
             "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}.tar.gz"
-            "artifacts/neo_cli_${VERSION}_checksums.txt"
+            "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_${VERSION}_checksums.txt"
           )
 
           for file in "${FILES[@]}"; do
@@ -122,7 +127,7 @@ jobs:
             artifacts/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}.tar.gz
             artifacts/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.tar.gz
             artifacts/neo_cli_macos_universal_${{ env.SAFE_VERSION }}/neo_cli_macos_universal_${{ env.SAFE_VERSION }}.tar.gz
-            artifacts/neo_cli_${{ needs.extract-version.outputs.version }}_checksums.txt
+            artifacts/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}/neo_cli_${{ needs.extract-version.outputs.version }}_checksums.txt
 
       - name: Set release status
         id: release-status
@@ -131,8 +136,6 @@ jobs:
   merge-into-development:
     needs: [extract-version, create-release]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -140,10 +143,13 @@ jobs:
           fetch-depth: 0
 
       - name: Merge and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git merge origin/production --no-ff -m "Merged production into development after release ${{ needs.extract-version.outputs.version }}"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push
 
   notify-result:
@@ -164,8 +170,6 @@ jobs:
     needs: [extract-version, create-release, merge-into-development]
     if: failure()
     uses: ./.github/workflows/abort_release.yml
-    permissions:
-      contents: write
     with:
       version: ${{ needs.extract-version.outputs.version }}
       release_branch: ${{ github.event.pull_request.head.ref }}

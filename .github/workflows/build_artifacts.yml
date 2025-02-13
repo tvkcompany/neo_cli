@@ -128,13 +128,26 @@ jobs:
         run: |
           tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
 
-      - name: Create checksums file
-        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'amd64'
+      - name: Generate checksum
         run: |
-          echo "# neo_cli ${{ inputs.version }} checksums" > neo_cli_${{ inputs.version }}_checksums.txt
-          echo "# Generated on $(date -u)" >> neo_cli_${{ inputs.version }}_checksums.txt
-          echo "" >> neo_cli_${{ inputs.version }}_checksums.txt
-          sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" >> neo_cli_${{ inputs.version }}_checksums.txt
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            FILENAME="${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz"
+            echo "$FILENAME" > checksum_filename.txt
+            sha256sum "$FILENAME" > checksum.txt
+          else
+            FILENAME="${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz"
+            echo "$FILENAME" > checksum_filename.txt
+            sha256sum "$FILENAME" > checksum.txt
+          fi
+
+      - name: Upload checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksum-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            checksum.txt
+            checksum_filename.txt
+          retention-days: 1
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -142,11 +155,46 @@ jobs:
           name: ${{ runner.os == 'Windows' && steps.set-filename-windows.outputs.archive_name || steps.set-filename-unix.outputs.output_name }}
           path: |
             ${{ runner.os == 'Windows' && format('{0}.tar.gz', steps.set-filename-windows.outputs.archive_name) || format('{0}.tar.gz', steps.set-filename-unix.outputs.output_name) }}
-            neo_cli_${{ inputs.version }}_checksums.txt
+          retention-days: 1
+
+  combine-checksums:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all checksums
+        uses: actions/download-artifact@v4
+        with:
+          pattern: checksum-*
+          path: checksums
+          merge-multiple: true
+
+      - name: Combine checksums
+        run: |
+          # Convert version to safe version for filename
+          SAFE_VERSION=$(echo "${{ inputs.version }}" | tr '.' '_')
+
+          echo "# neo_cli ${{ inputs.version }} checksums" > neo_cli_${SAFE_VERSION}_checksums.txt
+          echo "# Generated on $(date -u)" >> neo_cli_${SAFE_VERSION}_checksums.txt
+          echo "" >> neo_cli_${SAFE_VERSION}_checksums.txt
+
+          # Process each platform's checksum
+          for dir in checksums/checksum-*; do
+            if [ -f "$dir/checksum.txt" ] && [ -f "$dir/checksum_filename.txt" ]; then
+              HASH=$(cat "$dir/checksum.txt" | cut -d ' ' -f1)
+              FILENAME=$(cat "$dir/checksum_filename.txt")
+              echo "$HASH  $FILENAME" >> neo_cli_${SAFE_VERSION}_checksums.txt
+            fi
+          done
+
+      - name: Upload combined checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: neo_cli_*_checksums.txt
           retention-days: 1
 
   notify-result:
-    needs: [build]
+    needs: [build, combine-checksums]
     if: always()
     uses: ./.github/workflows/send_discord_message.yml
     with:

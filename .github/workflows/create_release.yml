@@ -133,8 +133,99 @@ jobs:
         id: release-status
         run: echo "release_created=true" >> $GITHUB_OUTPUT
 
-  merge-into-development:
+  update-homebrew:
     needs: [extract-version, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set safe version
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          echo "SAFE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
+
+      - name: Download checksums artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: neo_cli_linux_amd64_${{ env.SAFE_VERSION }}
+          path: artifacts
+
+      - name: Extract SHA256 hashes
+        id: extract-hashes
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          CHECKSUM_FILE="artifacts/neo_cli_${VERSION}_checksums.txt"
+
+          # Extract SHA256 hashes for each platform
+          MACOS_HASH=$(grep "neo_cli_macos_universal_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
+          LINUX_AMD64_HASH=$(grep "neo_cli_linux_amd64_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
+          LINUX_ARM64_HASH=$(grep "neo_cli_linux_arm64_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
+
+          # Set outputs for use in next step
+          echo "macos_hash=$MACOS_HASH" >> $GITHUB_OUTPUT
+          echo "linux_amd64_hash=$LINUX_AMD64_HASH" >> $GITHUB_OUTPUT
+          echo "linux_arm64_hash=$LINUX_ARM64_HASH" >> $GITHUB_OUTPUT
+
+      - name: Checkout Homebrew tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: tommyvankessel/homebrew-testneo
+          path: homebrew-tap
+          token: ${{ secrets.WORKFLOW_PAT }}
+          sparse-checkout: |
+            Formula/neo.rb
+          sparse-checkout-cone-mode: false
+
+      - name: Update formula
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          SAFE_VERSION="${{ env.SAFE_VERSION }}"
+
+          # Update Formula/neo.rb
+          cat > homebrew-tap/Formula/neo.rb << EOL
+          class Neo < Formula
+            desc "Neo CLI"
+            homepage "https://tvk.company"
+            version "$VERSION"
+            license "Proprietary"
+
+            on_macos do
+              url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_macos_universal_${SAFE_VERSION}.tar.gz"
+              sha256 "${{ steps.extract-hashes.outputs.macos_hash }}"
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}.tar.gz"
+                sha256 "${{ steps.extract-hashes.outputs.linux_amd64_hash }}"
+              end
+              
+              if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+                url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}.tar.gz"
+                sha256 "${{ steps.extract-hashes.outputs.linux_arm64_hash }}"
+              end
+            end
+
+            def install
+              bin.install "neo"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/neo --version")
+            end
+          end
+          EOL
+
+      - name: Commit and push changes
+        working-directory: homebrew-tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/neo.rb
+          git commit -m "Neo CLI ${{ needs.extract-version.outputs.version }} release"
+          git push
+
+  merge-into-development:
+    needs: [extract-version, create-release, update-homebrew]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -153,13 +244,14 @@ jobs:
           git push
 
   notify-result:
-    needs: [extract-version, create-release, merge-into-development]
+    needs:
+      [extract-version, create-release, merge-into-development, update-homebrew]
     if: always()
     uses: ./.github/workflows/send_discord_message.yml
     with:
       message: |
         ${{ 
-          needs.create-release.result == 'success'
+          needs.create-release.result == 'success' && needs.update-homebrew.result == 'success'
           && format('✅ Successfully released version `{0}`! 🎉', needs.extract-version.outputs.version)
           || format('❌ Failed to release version `{0}`. Please check the logs.', needs.extract-version.outputs.version)
         }}
@@ -167,7 +259,8 @@ jobs:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   abort-on-failure:
-    needs: [extract-version, create-release, merge-into-development]
+    needs:
+      [extract-version, create-release, merge-into-development, update-homebrew]
     if: failure()
     uses: ./.github/workflows/abort_release.yml
     with:

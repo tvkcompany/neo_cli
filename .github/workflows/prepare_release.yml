@@ -6,6 +6,11 @@ on:
     branches:
       - production
 
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
 jobs:
   notify-start:
     if: startsWith(github.head_ref, 'release/')
@@ -165,9 +170,6 @@ jobs:
   prepare-release:
     needs: validate-version
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     outputs:
       version_updated: ${{ steps.prepare-files.outputs.version_updated }}
     steps:
@@ -280,8 +282,6 @@ jobs:
     needs: [validate-version, prepare-release]
     if: failure()
     uses: ./.github/workflows/abort_release.yml
-    permissions:
-      contents: write
     with:
       version: ${{ needs.validate-version.outputs.version }}
       release_branch: ${{ github.head_ref }}

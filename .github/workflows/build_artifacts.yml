@@ -139,9 +139,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          name: ${{ runner.os == 'Windows' && steps.set-filename-windows.outputs.archive_name || steps.set-filename-unix.outputs.output_name }}
           path: |
-            ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}*
+            ${{ runner.os == 'Windows' && format('{0}.tar.gz', steps.set-filename-windows.outputs.archive_name) || format('{0}.tar.gz', steps.set-filename-unix.outputs.output_name) }}
             neo_cli_${{ inputs.version }}_checksums.txt
           retention-days: 1
 

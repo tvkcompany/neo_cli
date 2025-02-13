@@ -160,6 +160,12 @@ jobs:
           LINUX_AMD64_HASH=$(grep "neo_cli_linux_amd64_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
           LINUX_ARM64_HASH=$(grep "neo_cli_linux_arm64_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
 
+          # Debug output
+          echo "Found hashes:"
+          echo "macOS: $MACOS_HASH"
+          echo "Linux AMD64: $LINUX_AMD64_HASH"
+          echo "Linux ARM64: $LINUX_ARM64_HASH"
+
           # Set outputs for use in next step
           echo "macos_hash=$MACOS_HASH" >> $GITHUB_OUTPUT
           echo "linux_amd64_hash=$LINUX_AMD64_HASH" >> $GITHUB_OUTPUT

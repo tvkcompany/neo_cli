@@ -100,15 +100,15 @@ jobs:
             "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}.tar.gz"
             "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}/neo_cli_windows_amd64_${SAFE_VERSION}.tar.gz"
             "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}.tar.gz"
-            "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_${VERSION}_checksums.txt"
           )
 
           for file in "${FILES[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "❌ Required file not found: $file"
+            if [ ! -f "$file" ] || [ ! -f "${file%/*}/sha256sum.txt" ]; then
+              echo "❌ Required file not found: $file or its checksum"
               exit 1
             else
               echo "✅ Found file: $(ls -lh "$file" | awk '{print $5, $9}')"
+              echo "✅ Found checksum: $(cat "${file%/*}/sha256sum.txt")"
             fi
           done
           echo "🎉 All required files are present and ready for release!"
@@ -127,7 +127,6 @@ jobs:
             artifacts/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}.tar.gz
             artifacts/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.tar.gz
             artifacts/neo_cli_macos_universal_${{ env.SAFE_VERSION }}/neo_cli_macos_universal_${{ env.SAFE_VERSION }}.tar.gz
-            artifacts/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}/neo_cli_${{ needs.extract-version.outputs.version }}_checksums.txt
 
       - name: Set release status
         id: release-status
@@ -143,22 +142,24 @@ jobs:
           SAFE_VERSION=$(echo $VERSION | tr '.' '_')
           echo "SAFE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
 
-      - name: Download checksums artifact
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: neo_cli_linux_amd64_${{ env.SAFE_VERSION }}
           path: artifacts
 
       - name: Extract SHA256 hashes
         id: extract-hashes
         run: |
-          VERSION="${{ needs.extract-version.outputs.version }}"
-          CHECKSUM_FILE="artifacts/neo_cli_${VERSION}_checksums.txt"
-
           # Extract SHA256 hashes for each platform
-          MACOS_HASH=$(grep "neo_cli_macos_universal_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
-          LINUX_AMD64_HASH=$(grep "neo_cli_linux_amd64_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
-          LINUX_ARM64_HASH=$(grep "neo_cli_linux_arm64_" "$CHECKSUM_FILE" | cut -d ' ' -f 1)
+          MACOS_HASH=$(cat "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/sha256sum.txt" | cut -d ' ' -f 1)
+          LINUX_AMD64_HASH=$(cat "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/sha256sum.txt" | cut -d ' ' -f 1)
+          LINUX_ARM64_HASH=$(cat "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/sha256sum.txt" | cut -d ' ' -f 1)
+
+          # Validate that we found all hashes
+          if [ -z "$MACOS_HASH" ] || [ -z "$LINUX_AMD64_HASH" ] || [ -z "$LINUX_ARM64_HASH" ]; then
+            echo "Error: Failed to extract one or more hashes"
+            exit 1
+          fi
 
           # Debug output
           echo "Found hashes:"

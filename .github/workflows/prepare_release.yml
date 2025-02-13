@@ -179,8 +179,6 @@ jobs:
 
       - name: Prepare release files
         id: prepare-files
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
 
@@ -287,16 +285,3 @@ jobs:
         }}
     secrets:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-  abort-on-failure:
-    needs: [validate-version, prepare-release]
-    if: failure()
-    uses: ./.github/workflows/abort_release.yml
-    with:
-      version: ${{ needs.validate-version.outputs.version }}
-      release_branch: ${{ github.head_ref }}
-      should_abort_version_bump: ${{ needs.prepare-release.outputs.version_updated == 'true' }}
-      should_abort_production: false
-    secrets:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}

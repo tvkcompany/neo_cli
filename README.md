@@ -1,3 +1,3 @@
 # Neo CLI
 
-Your gateway to experiencing Flutter app development with exceptional speed and precision thanks to the Neo framework.
+The Neo Command Line Interface (CLI for short) is your gateway to using [the Neo framework](https://github.com/tvkcompany/neo).

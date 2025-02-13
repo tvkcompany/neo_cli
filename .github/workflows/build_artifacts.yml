@@ -122,27 +122,25 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          else
+            sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          fi
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
         run: |
           tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
-
-      - name: Create checksums file
-        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'amd64'
-        run: |
-          echo "# neo_cli ${{ inputs.version }} checksums" > neo_cli_${{ inputs.version }}_checksums.txt
-          echo "# Generated on $(date -u)" >> neo_cli_${{ inputs.version }}_checksums.txt
-          echo "" >> neo_cli_${{ inputs.version }}_checksums.txt
-          sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" >> neo_cli_${{ inputs.version }}_checksums.txt
+          certutil -hashfile "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" SHA256 | findstr /v "hash" | findstr /v "CertUtil" > sha256sum.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          name: ${{ runner.os == 'Windows' && steps.set-filename-windows.outputs.archive_name || steps.set-filename-unix.outputs.output_name }}
           path: |
-            ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}*
-            neo_cli_${{ inputs.version }}_checksums.txt
+            ${{ runner.os == 'Windows' && format('{0}.tar.gz', steps.set-filename-windows.outputs.archive_name) || format('{0}.tar.gz', steps.set-filename-unix.outputs.output_name) }}
+            sha256sum.txt
           retention-days: 1
 
   notify-result:

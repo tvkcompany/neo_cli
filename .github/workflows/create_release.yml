@@ -6,6 +6,10 @@ on:
     branches:
       - "production"
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   notify-start:
     if: github.event.pull_request.merged == true
@@ -50,8 +54,6 @@ jobs:
   create-release:
     needs: [extract-version, build-artifacts]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
       release_created: ${{ steps.create-release.outputs.release_created }}
     steps:
@@ -131,8 +133,6 @@ jobs:
   merge-into-development:
     needs: [extract-version, create-release]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -164,8 +164,6 @@ jobs:
     needs: [extract-version, create-release, merge-into-development]
     if: failure()
     uses: ./.github/workflows/abort_release.yml
-    permissions:
-      contents: write
     with:
       version: ${{ needs.extract-version.outputs.version }}
       release_branch: ${{ github.event.pull_request.head.ref }}

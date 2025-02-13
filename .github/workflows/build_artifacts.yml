@@ -83,9 +83,9 @@ jobs:
           # Replace dots with underscores in version for filename safety
           SAFE_VERSION=$(echo $VERSION | tr '.' '_')
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}.exe" >> $GITHUB_OUTPUT
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}.exe" >> $GITHUB_OUTPUT
           else
-            echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $GITHUB_OUTPUT
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Set output filename (Windows)
@@ -97,11 +97,11 @@ jobs:
           $SAFE_VERSION = $VERSION -replace '\.','_'
           if ("${{ matrix.platform }}" -eq "windows") {
             # For the executable itself
-            echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}.exe" >> $env:GITHUB_OUTPUT
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}.exe" >> $env:GITHUB_OUTPUT
             # For the archive name (without .exe)
-            echo "archive_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $env:GITHUB_OUTPUT
+            echo "archive_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}" >> $env:GITHUB_OUTPUT
           } else {
-            echo "output_name=neo_cli_${{ matrix.platform }}_${{ matrix.arch }}_${SAFE_VERSION}" >> $env:GITHUB_OUTPUT
+            echo "output_name=neo_cli_${SAFE_VERSION}_${{ matrix.platform }}_${{ matrix.arch }}" >> $env:GITHUB_OUTPUT
           }
 
       - name: Build executable (Unix)
@@ -121,7 +121,9 @@ jobs:
       - name: Create archive (Unix)
         if: runner.os != 'Windows'
         run: |
-          tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+          # Rename the binary to 'neo'
+          mv "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}" "neo"
+          tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "neo"
           if [ "${{ runner.os }}" = "macOS" ]; then
             shasum -a 256 "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
           else
@@ -131,7 +133,9 @@ jobs:
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
         run: |
-          tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+          # Rename the binary to 'neo.exe'
+          mv "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}" "neo.exe"
+          tar -czf "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" "neo.exe"
           certutil -hashfile "${{ steps.set-filename-windows.outputs.archive_name }}.tar.gz" SHA256 | findstr /v "hash" | findstr /v "CertUtil" > sha256sum.txt
 
       - name: Upload artifact

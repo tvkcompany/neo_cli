@@ -96,10 +96,10 @@ jobs:
 
           echo -e "\n✨ Verifying required release files:"
           FILES=(
-            "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}.tar.gz"
-            "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}.tar.gz"
-            "artifacts/neo_cli_windows_amd64_${SAFE_VERSION}/neo_cli_windows_amd64_${SAFE_VERSION}.tar.gz"
-            "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/neo_cli_macos_universal_${SAFE_VERSION}.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_windows_amd64/neo_cli_${SAFE_VERSION}_windows_amd64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz"
           )
 
           for file in "${FILES[@]}"; do
@@ -123,10 +123,10 @@ jobs:
           prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
           fail_on_unmatched_files: true
           files: |
-            artifacts/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}/neo_cli_linux_amd64_${{ env.SAFE_VERSION }}.tar.gz
-            artifacts/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}/neo_cli_linux_arm64_${{ env.SAFE_VERSION }}.tar.gz
-            artifacts/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}/neo_cli_windows_amd64_${{ env.SAFE_VERSION }}.tar.gz
-            artifacts/neo_cli_macos_universal_${{ env.SAFE_VERSION }}/neo_cli_macos_universal_${{ env.SAFE_VERSION }}.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_macos_universal/neo_cli_${{ env.SAFE_VERSION }}_macos_universal.tar.gz
 
       - name: Set release status
         id: release-status
@@ -151,21 +151,15 @@ jobs:
         id: extract-hashes
         run: |
           # Extract SHA256 hashes for each platform
-          MACOS_HASH=$(cat "artifacts/neo_cli_macos_universal_${SAFE_VERSION}/sha256sum.txt" | cut -d ' ' -f 1)
-          LINUX_AMD64_HASH=$(cat "artifacts/neo_cli_linux_amd64_${SAFE_VERSION}/sha256sum.txt" | cut -d ' ' -f 1)
-          LINUX_ARM64_HASH=$(cat "artifacts/neo_cli_linux_arm64_${SAFE_VERSION}/sha256sum.txt" | cut -d ' ' -f 1)
+          MACOS_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/sha256sum.txt" | cut -d ' ' -f 1)
+          LINUX_AMD64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/sha256sum.txt" | cut -d ' ' -f 1)
+          LINUX_ARM64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/sha256sum.txt" | cut -d ' ' -f 1)
 
           # Validate that we found all hashes
           if [ -z "$MACOS_HASH" ] || [ -z "$LINUX_AMD64_HASH" ] || [ -z "$LINUX_ARM64_HASH" ]; then
             echo "Error: Failed to extract one or more hashes"
             exit 1
           fi
-
-          # Debug output
-          echo "Found hashes:"
-          echo "macOS: $MACOS_HASH"
-          echo "Linux AMD64: $LINUX_AMD64_HASH"
-          echo "Linux ARM64: $LINUX_ARM64_HASH"
 
           # Set outputs for use in next step
           echo "macos_hash=$MACOS_HASH" >> $GITHUB_OUTPUT
@@ -189,6 +183,8 @@ jobs:
 
           # Update Formula/neo.rb
           cat > homebrew-tap/Formula/neo.rb << EOL
+          require_relative "../lib/private_strategy"
+
           class Neo < Formula
             desc "Neo CLI"
             homepage "https://tvk.company"
@@ -196,18 +192,21 @@ jobs:
             license "Proprietary"
 
             on_macos do
-              url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_macos_universal_${SAFE_VERSION}.tar.gz"
+              url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz",
+                  using: GitHubPrivateRepositoryReleaseDownloadStrategy
               sha256 "${{ steps.extract-hashes.outputs.macos_hash }}"
             end
 
             on_linux do
               if Hardware::CPU.intel?
-                url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_linux_amd64_${SAFE_VERSION}.tar.gz"
+                url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz",
+                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
                 sha256 "${{ steps.extract-hashes.outputs.linux_amd64_hash }}"
               end
               
               if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-                url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_linux_arm64_${SAFE_VERSION}.tar.gz"
+                url "https://github.com/tommyvankessel/test_neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz",
+                    using: GitHubPrivateRepositoryReleaseDownloadStrategy
                 sha256 "${{ steps.extract-hashes.outputs.linux_arm64_hash }}"
               end
             end
@@ -217,7 +216,7 @@ jobs:
             end
 
             test do
-              assert_match version.to_s, shell_output("#{bin}/neo --version")
+              assert_match version.to_s, shell_output("\#{bin}/neo --version")
             end
           end
           EOL

@@ -122,7 +122,11 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           tar czf "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
-          sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          else
+            sha256sum "${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}.tar.gz" > sha256sum.txt
+          fi
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'

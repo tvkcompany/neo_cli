@@ -190,7 +190,7 @@ jobs:
           echo "::notice::Updated version in pubspec.yaml"
 
           # Update version in constants.dart
-          if ! sed -i "s|static const String version = '[^']*'|static const String version = '$VERSION'|" lib/core/constants.dart; then
+          if ! sed -i "s|static const String version = \\\"[^\\\"]*\\\"|static const String version = \\\"$VERSION\\\"|" lib/core/constants.dart; then
             echo "::error::Failed to update version in constants.dart"
             exit 1
           fi
@@ -237,7 +237,7 @@ jobs:
             echo "::notice::No changes to commit"
           else
             # Commit and push changes
-            git add pubspec.yaml "$NOTE_FILE" "$INTERNAL_NOTE_FILE"
+            git add pubspec.yaml lib/core/constants.dart "$NOTE_FILE" "$INTERNAL_NOTE_FILE"
             git commit -m "Prepared release $VERSION"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push

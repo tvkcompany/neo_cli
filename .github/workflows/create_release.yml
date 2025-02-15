@@ -96,7 +96,7 @@ jobs:
           FILES=(
             "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz"
             "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz"
-            "artifacts/neo_cli_${SAFE_VERSION}_windows_amd64/neo_cli_${SAFE_VERSION}_windows_amd64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_windows_amd64/neo_cli_${SAFE_VERSION}_windows_amd64.zip"
             "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz"
           )
 
@@ -123,7 +123,7 @@ jobs:
           files: |
             artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64.tar.gz
             artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64.tar.gz
-            artifacts/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64.zip
             artifacts/neo_cli_${{ env.SAFE_VERSION }}_macos_universal/neo_cli_${{ env.SAFE_VERSION }}_macos_universal.tar.gz
 
       - name: Set release status

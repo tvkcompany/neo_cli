@@ -7,19 +7,8 @@ on:
         required: true
         type: string
         description: "Version number for the release (e.g. 1.6.5 or 1.7.1-beta.3)"
-    secrets:
-      webhookUrl:
-        required: true
-        description: "Discord webhook URL for notifications"
 
 jobs:
-  notify-start:
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: "🏗️ Starting build for version `${{ inputs.version }}`..."
-    secrets:
-      webhookUrl: ${{ secrets.webhookUrl }}
-
   build:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
@@ -146,17 +135,3 @@ jobs:
             ${{ runner.os == 'Windows' && format('{0}.zip', steps.set-filename-windows.outputs.archive_name) || format('{0}.tar.gz', steps.set-filename-unix.outputs.output_name) }}
             sha256sum.txt
           retention-days: 1
-
-  notify-result:
-    needs: [build]
-    if: always()
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.build.result == 'success'
-          && format('✅ Successfully built artifacts for version `{0}`!', inputs.version)
-          || format('❌ Failed to build artifacts for version `{0}`. Please check the logs.', inputs.version)
-        }}
-    secrets:
-      webhookUrl: ${{ secrets.webhookUrl }}

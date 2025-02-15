@@ -8,9 +8,6 @@ on:
       branch:
         required: true
         type: string
-    secrets:
-      webhookUrl:
-        required: true
 
 jobs:
   check-branch:
@@ -39,17 +36,8 @@ jobs:
             echo "branch-name=$BRANCH" >> $GITHUB_OUTPUT
           fi
 
-  notify-start:
-    needs: check-branch
-    if: needs.check-branch.outputs.branch-name != ''
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: "Deleting branch [`${{ needs.check-branch.outputs.branch-name }}`](https://github.com/${{ github.repository }}/tree/${{ needs.check-branch.outputs.branch-name }}) due to merge..."
-    secrets:
-      webhookUrl: ${{ github.event_name == 'pull_request' && secrets.DISCORD_WEBHOOK_URL || secrets.webhookUrl }}
-
   delete-branch:
-    needs: [check-branch, notify-start]
+    needs: [check-branch]
     if: needs.check-branch.outputs.branch-name != ''
     runs-on: ubuntu-latest
     permissions:
@@ -60,21 +48,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branches: ${{ needs.check-branch.outputs.branch-name }}
-
-  notify-result:
-    needs: [check-branch, delete-branch]
-    if: needs.check-branch.outputs.branch-name != ''
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.delete-branch.result == 'success'
-          && format('✅ Successfully deleted branch [`{0}`](https://github.com/{1}/tree/{0}).', 
-            needs.check-branch.outputs.branch-name,
-            github.repository)
-          || format('❌ Failed to delete branch [`{0}`](https://github.com/{1}/tree/{0}). Please check the logs.', 
-            needs.check-branch.outputs.branch-name,
-            github.repository)
-        }}
-    secrets:
-      webhookUrl: ${{ github.event_name == 'pull_request' && secrets.DISCORD_WEBHOOK_URL || secrets.webhookUrl }}

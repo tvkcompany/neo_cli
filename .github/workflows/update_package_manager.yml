@@ -1,0 +1,161 @@
+name: Update Package Manager
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: "Version to update to (e.g. 1.2.3)"
+      package_manager:
+        required: true
+        type: string
+        description: "Package manager to update (homebrew or scoop)"
+      macos_hash:
+        required: false
+        type: string
+        description: "SHA256 hash for macOS binary"
+      linux_amd64_hash:
+        required: false
+        type: string
+        description: "SHA256 hash for Linux AMD64 binary"
+      linux_arm64_hash:
+        required: false
+        type: string
+        description: "SHA256 hash for Linux ARM64 binary"
+      windows_amd64_hash:
+        required: false
+        type: string
+        description: "SHA256 hash for Windows AMD64 binary"
+    secrets:
+      gh_pat:
+        required: true
+        description: "GitHub PAT with access to package manager repositories"
+
+jobs:
+  update-package-manager:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set repository and file info
+        id: repo-info
+        run: |
+          VERSION="${{ inputs.version }}"
+          SAFE_VERSION=$(echo $VERSION | tr '.' '_')
+          echo "safe_version=$SAFE_VERSION" >> $GITHUB_OUTPUT
+
+          if [[ "${{ inputs.package_manager }}" == "homebrew" ]]; then
+            echo "repo=tvkcompany/homebrew-neo" >> $GITHUB_OUTPUT
+            echo "file_path=Formula/neo.rb" >> $GITHUB_OUTPUT
+          else
+            echo "repo=tvkcompany/scoop-neo" >> $GITHUB_OUTPUT
+            echo "file_path=bucket/neo.json" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo-info.outputs.repo }}
+          ref: production
+          token: ${{ secrets.gh_pat }}
+          sparse-checkout: |
+            ${{ steps.repo-info.outputs.file_path }}
+          sparse-checkout-cone-mode: false
+
+      - name: Create release branch
+        env:
+          GH_TOKEN: ${{ secrets.gh_pat }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          BRANCH="release/${VERSION}"
+          git checkout -b "$BRANCH"
+
+      - name: Update Homebrew formula
+        if: inputs.package_manager == 'homebrew'
+        run: |
+          VERSION="${{ inputs.version }}"
+          SAFE_VERSION="${{ steps.repo-info.outputs.safe_version }}"
+
+          cat > ${{ steps.repo-info.outputs.file_path }} << EOL
+          class Neo < Formula
+            desc "Neo CLI"
+            homepage "https://tvk.company"
+            version "$VERSION"
+            license "Proprietary"
+
+            on_macos do
+              url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz"
+              sha256 "${{ inputs.macos_hash }}"
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz"
+                sha256 "${{ inputs.linux_amd64_hash }}"
+              end
+              
+              if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+                url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz"
+                sha256 "${{ inputs.linux_arm64_hash }}"
+              end
+            end
+
+            def install
+              bin.install "neo"
+            end
+          end
+          EOL
+
+      - name: Update Scoop manifest
+        if: inputs.package_manager == 'scoop'
+        run: |
+          VERSION="${{ inputs.version }}"
+          SAFE_VERSION="${{ steps.repo-info.outputs.safe_version }}"
+
+          cat > ${{ steps.repo-info.outputs.file_path }} << EOL
+          {
+              "version": "$VERSION",
+              "description": "Neo CLI",
+              "homepage": "https://tvk.company",
+              "license": "Proprietary",
+              "architecture": {
+                  "64bit": {
+                      "url": "https://github.com/tvkcompany/neo_cli/releases/download/$VERSION/neo_cli_${SAFE_VERSION}_windows_amd64.zip",
+                      "hash": "${{ inputs.windows_amd64_hash }}"
+                  }
+              },
+              "bin": "neo.exe",
+              "checkver": {
+                  "url": "https://raw.githubusercontent.com/tvkcompany/scoop-neo/main/bucket/neo.json",
+                  "jsonpath": "$.version"
+              }
+          }
+          EOL
+
+      - name: Commit and create PR
+        env:
+          GH_TOKEN: ${{ secrets.gh_pat }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          BRANCH="release/${VERSION}"
+          MANAGER="${{ inputs.package_manager }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ${{ steps.repo-info.outputs.file_path }}
+          git commit -m "Neo CLI $VERSION release"
+          git push origin "$BRANCH"
+
+          # Create PR using gh CLI
+          gh pr create \
+            --repo ${{ steps.repo-info.outputs.repo }} \
+            --title "Neo CLI ${VERSION} release" \
+            --body "Updates the Neo CLI ${MANAGER} package to version ${VERSION}.
+
+            This PR was automatically created by the release workflow.
+            Please verify the changes and merge when ready.
+
+            Changes:
+            - Updated version to \`${VERSION}\`
+            - Updated download URLs and checksums for all platforms" \
+            --base production \
+            --head "$BRANCH"

@@ -1,7 +1,7 @@
 /// Constants used throughout the Neo CLI
 class NeoConstants {
   /// The current version of the Neo CLI
-  static const String version = "0.1.2";
+  static const String version = "0.1.3";
 
   /// The Neo CLI logo
   static const String logo = '''

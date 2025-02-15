@@ -79,19 +79,3 @@ jobs:
           if [[ ${#UPDATED_VERSIONS[@]} -gt 0 ]]; then
             echo "updated_versions=${UPDATED_VERSIONS[*]}" >> $GITHUB_OUTPUT
           fi
-
-  notify-result:
-    needs: update-releases
-    if: always()
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.update-releases.result == 'success' && needs.update-releases.outputs.updated_versions != ''
-          && format('✅ Successfully updated additional release notes for versions: `{0}`', needs.update-releases.outputs.updated_versions)
-          || needs.update-releases.result == 'success'
-          && '✓ No additional release notes needed updating'
-          || '❌ Failed to update release notes. Please check the logs.'
-        }}
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

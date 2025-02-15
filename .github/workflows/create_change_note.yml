@@ -61,23 +61,3 @@ jobs:
           Please edit \`${NOTE_FILE}\` to document your changes. This will help when creating the release notes later.
 
           Don't forget to update both the user-facing and internal sections!"
-
-  notify-result:
-    needs: create-change-note
-    if: always()
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.create-change-note.result == 'success'
-          && format('✅ Created change note for [#{0}](https://github.com/{2}/pull/{0}) (`{1}`)', 
-            github.event.pull_request.number, 
-            github.event.pull_request.head.ref,
-            github.repository)
-          || format('❌ Failed to create change note for [#{0}](https://github.com/{2}/pull/{0}) (`{1}`). Please check the logs.', 
-            github.event.pull_request.number, 
-            github.event.pull_request.head.ref,
-            github.repository)
-        }}
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

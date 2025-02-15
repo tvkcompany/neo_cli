@@ -11,14 +11,6 @@ permissions:
   actions: write
 
 jobs:
-  notify-start:
-    if: github.event.pull_request.merged == true
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: "Branch [`${{ github.event.pull_request.head.ref }}`](https://github.com/${{ github.repository }}/tree/${{ github.event.pull_request.head.ref }}) merged into [`${{ github.event.pull_request.base.ref }}`](https://github.com/${{ github.repository }}/tree/${{ github.event.pull_request.base.ref }}). Creating release..."
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
   extract-version:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
@@ -48,8 +40,6 @@ jobs:
     uses: ./.github/workflows/build_artifacts.yml
     with:
       version: ${{ needs.extract-version.outputs.version }}
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   create-release:
     needs: [extract-version, build-artifacts]
@@ -196,29 +186,3 @@ jobs:
           git merge origin/production --no-ff -m "Merged production into development after release ${{ needs.extract-version.outputs.version }}"
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push
-
-  notify-result:
-    needs:
-      [
-        extract-version,
-        create-release,
-        merge-into-development,
-        update-homebrew,
-        update-scoop,
-      ]
-    if: always()
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.create-release.result == 'success' && 
-          needs.update-homebrew.result == 'success' && 
-          needs.update-scoop.result == 'success'
-          && format('✅ Successfully released [`{0}`](https://github.com/{1}/releases/tag/{0})! 🎉', 
-            needs.extract-version.outputs.version,
-            github.repository)
-          || format('❌ Failed to release `{0}`. Please check the logs.', 
-            needs.extract-version.outputs.version)
-        }}
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

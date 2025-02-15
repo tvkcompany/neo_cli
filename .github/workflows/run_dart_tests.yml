@@ -8,13 +8,6 @@ on:
       - "release/*"
 
 jobs:
-  notify-start:
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: "Running Dart tests..."
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
   test:
     runs-on: ubuntu-latest
     steps:
@@ -27,17 +20,3 @@ jobs:
 
       - name: Run tests
         run: dart test
-
-  notify-result:
-    needs: test
-    if: always()
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.test.result == 'success'
-          && '✅ Successfully ran Dart tests. All tests passed.'
-          || '❌ Failed Dart tests. Please check the logs.'
-        }}
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

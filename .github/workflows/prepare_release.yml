@@ -12,14 +12,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  notify-start:
-    if: startsWith(github.head_ref, 'release/')
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: "PR opened to merge [`${{ github.head_ref }}`](https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}) into [`${{ github.base_ref }}`](https://github.com/${{ github.repository }}/tree/${{ github.base_ref }}). Preparing release..."
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
   validate-version:
     if: startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
@@ -259,10 +251,8 @@ jobs:
             1. \`${noteFile}\` - User-facing changes
             2. \`${internalNoteFile}\` - Internal changes
 
-            💡 **Tip**: Check the change notes in \`docs/dev/change_notes/\` to help compile the release notes.
-            These were created for each PR and contain detailed changes.
-
-            > **Note**: Once this PR is merged and the version is released, the change notes from features included in this release will be automatically removed to clean up the change notes folder. Any change notes from features merged after this release branch was created will be preserved for the next release.
+            > **💡 Tip**: Click the \`Cleaned up change notes\` commit to see the change notes for this release.
+            These were created for each PR and contain detailed changes. This helps compile the release notes.
             `;
 
             await github.rest.issues.createComment({
@@ -271,21 +261,3 @@ jobs:
               issue_number: context.issue.number,
               body: comment
             });
-
-  notify-result:
-    needs: [validate-version, prepare-release]
-    if: always()
-    uses: ./.github/workflows/send_discord_message.yml
-    with:
-      message: |
-        ${{ 
-          needs.prepare-release.result == 'success'
-          && format('✅ Successfully prepared release `{0}`. Please review [PR #{1}](https://github.com/{2}/pull/{1})', 
-            needs.validate-version.outputs.version,
-            github.event.pull_request.number,
-            github.repository)
-          || format('❌ Failed to prepare release `{0}`. Please check the logs.', 
-            needs.validate-version.outputs.version)
-        }}
-    secrets:
-      webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

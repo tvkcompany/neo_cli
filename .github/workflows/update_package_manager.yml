@@ -127,13 +127,6 @@ jobs:
               "checkver": {
                   "url": "https://raw.githubusercontent.com/tvkcompany/scoop-neo/main/bucket/neo.json",
                   "jsonpath": "$.version"
-              },
-              "autoupdate": {
-                  "architecture": {
-                      "64bit": {
-                          "url": "https://github.com/tvkcompany/neo_cli/releases/download/\$version/neo_cli_\$underscoreVersion_windows_amd64.zip"
-                      }
-                  }
               }
           }
           EOL

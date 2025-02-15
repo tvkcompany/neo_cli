@@ -16,7 +16,7 @@ jobs:
     if: startsWith(github.head_ref, 'release/')
     uses: ./.github/workflows/send_discord_message.yml
     with:
-      message: "PR opened to merge `${{ github.head_ref }}` into `${{ github.base_ref }}`. Preparing release..."
+      message: "PR opened to merge [`${{ github.head_ref }}`](https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}) into [`${{ github.base_ref }}`](https://github.com/${{ github.repository }}/tree/${{ github.base_ref }}). Preparing release..."
     secrets:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
@@ -279,9 +279,13 @@ jobs:
     with:
       message: |
         ${{ 
-          (needs.validate-version.result == 'success' && needs.prepare-release.result == 'success')
-          && format('✅ Successfully prepared release `{0}`.', needs.validate-version.outputs.version)
-          || format('❌ Failed to prepare release `{0}`. Please check the logs.', needs.validate-version.outputs.version)
+          needs.prepare-release.result == 'success'
+          && format('✅ Successfully prepared release `{0}`. Please review [PR #{1}](https://github.com/{2}/pull/{1})', 
+            needs.validate-version.outputs.version,
+            github.event.pull_request.number,
+            github.repository)
+          || format('❌ Failed to prepare release `{0}`. Please check the logs.', 
+            needs.validate-version.outputs.version)
         }}
     secrets:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}

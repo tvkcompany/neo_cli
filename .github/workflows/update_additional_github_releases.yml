@@ -88,7 +88,17 @@ jobs:
       message: |
         ${{ 
           needs.update-releases.result == 'success' && needs.update-releases.outputs.updated_versions != ''
-          && format('✅ Successfully updated additional release notes for versions: `{0}`', needs.update-releases.outputs.updated_versions)
+          && format('✅ Updated release notes for: {0}', 
+            join(
+              fromJSON(format('[{0}]', 
+                needs.update-releases.outputs.updated_versions
+              )) | 
+              map(
+                format('[`{0}`](https://github.com/{1}/releases/tag/{0})', ., github.repository)
+              ), 
+              ', '
+            )
+          )
           || needs.update-releases.result == 'success'
           && '✓ No additional release notes needed updating'
           || '❌ Failed to update release notes. Please check the logs.'

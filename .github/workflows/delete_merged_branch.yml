@@ -44,7 +44,7 @@ jobs:
     if: needs.check-branch.outputs.branch-name != ''
     uses: ./.github/workflows/send_discord_message.yml
     with:
-      message: "Deleting branch `${{ needs.check-branch.outputs.branch-name }}` due to merge..."
+      message: "Deleting branch [`${{ needs.check-branch.outputs.branch-name }}`](https://github.com/${{ github.repository }}/tree/${{ needs.check-branch.outputs.branch-name }}) due to merge..."
     secrets:
       webhookUrl: ${{ github.event_name == 'pull_request' && secrets.DISCORD_WEBHOOK_URL || secrets.webhookUrl }}
 
@@ -69,8 +69,12 @@ jobs:
       message: |
         ${{ 
           needs.delete-branch.result == 'success'
-          && format('✅ Successfully deleted branch `{0}`.', needs.check-branch.outputs.branch-name)
-          || format('❌ Failed to delete branch `{0}`. Please check the logs.', needs.check-branch.outputs.branch-name)
+          && format('✅ Successfully deleted branch [`{0}`](https://github.com/{1}/tree/{0}).', 
+            needs.check-branch.outputs.branch-name,
+            github.repository)
+          || format('❌ Failed to delete branch [`{0}`](https://github.com/{1}/tree/{0}). Please check the logs.', 
+            needs.check-branch.outputs.branch-name,
+            github.repository)
         }}
     secrets:
       webhookUrl: ${{ github.event_name == 'pull_request' && secrets.DISCORD_WEBHOOK_URL || secrets.webhookUrl }}

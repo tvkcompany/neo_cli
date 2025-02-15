@@ -2,32 +2,12 @@
 
 # Change Note
 
-This is an example change note.
-
-## New 🚀
-
-- Added `command` command. A nice example command
-
-## Improvements 💪
-
-- Added `example` flag to `command` for more customizability
-
-## Fixes 🐞
-
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+N/A
 
 # Internal Change Note
 
-This is an example internal change note
-
 ## Changes 🛠️
 
-- Changed some internal logic
+- Improvements to the Discord messages. They now include hyperlinks
+- Switched from using the GitHub API to the GitHub CLI for various operations
+- Added a new workflow to update both `homebrew-neo` and `scoop-neo`

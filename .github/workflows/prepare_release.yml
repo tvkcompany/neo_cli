@@ -251,10 +251,8 @@ jobs:
             1. \`${noteFile}\` - User-facing changes
             2. \`${internalNoteFile}\` - Internal changes
 
-            💡 **Tip**: Check the change notes in \`docs/dev/change_notes/\` to help compile the release notes.
-            These were created for each PR and contain detailed changes.
-
-            > **Note**: Once this PR is merged and the version is released, the change notes from features included in this release will be automatically removed to clean up the change notes folder. Any change notes from features merged after this release branch was created will be preserved for the next release.
+            > **💡 Tip**: Click the \`Cleaned up change notes\` commit to see the change notes for this release.
+            These were created for each PR and contain detailed changes. This helps compile the release notes.
             `;
 
             await github.rest.issues.createComment({

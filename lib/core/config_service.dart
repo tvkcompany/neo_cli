@@ -5,20 +5,40 @@ import 'package:path/path.dart' as path;
 /// Model class for Neo configuration
 class NeoConfig {
   final String organizationIdentifier;
+  final List<String> enabledPlatforms;
 
-  NeoConfig({required this.organizationIdentifier});
+  NeoConfig({
+    this.organizationIdentifier = '',
+    this.enabledPlatforms = const [],
+  });
 
-  /// Creates a config from JSON
+  /// Creates a config from JSON, handling missing fields for migration support
   factory NeoConfig.fromJson(Map<String, dynamic> json) {
     return NeoConfig(
-      organizationIdentifier: json['organizationIdentifier'] as String,
+      organizationIdentifier: json['organizationIdentifier'] as String? ?? '',
+      enabledPlatforms: json.containsKey('enabledPlatforms') ? List<String>.from(json['enabledPlatforms'] as List) : [],
     );
   }
 
-  /// Converts config to JSON
-  Map<String, dynamic> toJson() => {
-        'organizationIdentifier': organizationIdentifier,
-      };
+  /// Converts config to JSON, only including non-empty values
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{};
+    if (organizationIdentifier.isNotEmpty) {
+      json['organizationIdentifier'] = organizationIdentifier;
+    }
+    if (enabledPlatforms.isNotEmpty) {
+      json['enabledPlatforms'] = enabledPlatforms;
+    }
+    return json;
+  }
+
+  /// Creates a new config by merging with another, keeping existing values if not provided in other
+  NeoConfig merge(NeoConfig other) {
+    return NeoConfig(
+      organizationIdentifier: other.organizationIdentifier.isNotEmpty ? other.organizationIdentifier : organizationIdentifier,
+      enabledPlatforms: other.enabledPlatforms.isNotEmpty ? other.enabledPlatforms : enabledPlatforms,
+    );
+  }
 }
 
 /// Service for handling Neo configuration
@@ -60,7 +80,8 @@ class ConfigService {
   static Future<void> writeConfig(NeoConfig config) async {
     await ensureConfigDir();
     final file = File(configFile);
-    await file.writeAsString(jsonEncode(config.toJson()));
+    const encoder = JsonEncoder.withIndent('  ');
+    await file.writeAsString('${encoder.convert(config.toJson())}\n');
   }
 
   /// Checks if configuration exists

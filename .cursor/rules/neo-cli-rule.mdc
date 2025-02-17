@@ -1,0 +1,8 @@
+---
+description: This rule applies to all files in this project
+globs: *.dart
+---
+
+# Platform support
+
+This project is a CLI that will run on MacOS, Windows and Linux. Make sure all code will work on all three platforms by choosing the commands you use and creation if statements where needed.

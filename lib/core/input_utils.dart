@@ -9,6 +9,7 @@ class InputUtils {
     required String? argValue,
     required String promptMessage,
     required String? Function(String) validator,
+    String? defaultValue,
   }) {
     // If argument is provided, validate it
     if (argValue != null) {
@@ -24,9 +25,19 @@ class InputUtils {
 
     // Otherwise, prompt for input
     while (true) {
-      print("\n$promptMessage");
+      if (defaultValue != null && defaultValue.isNotEmpty) {
+        print("\n$promptMessage");
+        print("Press enter to keep current value: ${TerminalStyling.colorBold(defaultValue, TerminalStyling.cyan)}");
+      } else {
+        print("\n$promptMessage");
+      }
       stdout.write("> ");
       final input = stdin.readLineSync()?.trim();
+
+      // Return default value if input is empty and default exists
+      if ((input == null || input.isEmpty) && defaultValue != null && defaultValue.isNotEmpty) {
+        return defaultValue;
+      }
 
       if (input == null || input.isEmpty) {
         print(TerminalStyling.error("$fieldName is required"));

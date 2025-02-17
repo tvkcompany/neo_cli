@@ -13,7 +13,8 @@ class ConfigCommand extends Command {
   String get name => 'config';
 
   @override
-  String get description => 'Configure the Neo CLI';
+  String get description =>
+      'Configure default values for the Neo CLI. These values will be used as defaults when creating new projects, but can be overridden per project.';
 
   ConfigCommand() {
     argParser.addFlag(
@@ -26,20 +27,29 @@ class ConfigCommand extends Command {
     argParser.addOption(
       'org',
       abbr: 'o',
-      help:
-          'Organization identifier in reverse domain notation (e.g., com.example). This will be used as the default when creating new projects.',
+      help: 'Organization identifier in reverse domain notation (e.g., com.example)',
       valueHelp: 'identifier',
+    );
+
+    argParser.addOption(
+      'platforms',
+      abbr: 'p',
+      help: 'Comma-separated list of enabled platforms (e.g., ios,web,macos)',
+      valueHelp: 'platforms',
     );
   }
 
-  List<Task> _createTasks(String orgIdentifier) {
+  List<Task> _createTasks(String orgIdentifier, List<String> enabledPlatforms) {
     return [
       Task(
         name: 'Configuration',
         loadingMessage: 'Saving configuration...',
         completedMessage: 'Configuration saved',
         execute: () async {
-          final config = NeoConfig(organizationIdentifier: orgIdentifier);
+          final config = NeoConfig(
+            organizationIdentifier: orgIdentifier,
+            enabledPlatforms: enabledPlatforms,
+          );
           await ConfigService.writeConfig(config);
         },
       ),
@@ -55,8 +65,14 @@ class ConfigCommand extends Command {
       final config = await ConfigService.readConfig();
       if (config != null) {
         print("\nConfiguration:");
-        print(
-            "  ${TerminalStyling.info("Organization identifier")}: ${TerminalStyling.colorBold(config.organizationIdentifier, TerminalStyling.cyan)}");
+        if (config.organizationIdentifier.isNotEmpty) {
+          print(
+              "  ${TerminalStyling.info("Organization identifier")}: ${TerminalStyling.colorBold(config.organizationIdentifier, TerminalStyling.cyan)}");
+        }
+        if (config.enabledPlatforms.isNotEmpty) {
+          print(
+              "  ${TerminalStyling.info("Enabled platforms")}: ${TerminalStyling.colorBold(config.enabledPlatforms.join(','), TerminalStyling.cyan)}");
+        }
         print(""); // Add spacing at the end
         return;
       }
@@ -64,27 +80,66 @@ class ConfigCommand extends Command {
       return;
     }
 
-    // Check if config already exists
-    if (await ConfigService.configExists() && argResults!['org'] == null) {
-      if (!InputUtils.confirm(TerminalStyling.warning(
-          "\nNeo is already configured. Running this command will overwrite your current configuration."))) {
-        print("\nConfiguration unchanged.");
-        return;
+    // Read existing config if any
+    final existingConfig = await ConfigService.readConfig() ?? NeoConfig();
+
+    // If using CLI flags, only configure specified values
+    if (argResults!['org'] != null || argResults!['platforms'] != null) {
+      String orgIdentifier = existingConfig.organizationIdentifier;
+      List<String> enabledPlatforms = existingConfig.enabledPlatforms;
+
+      if (argResults!['org'] != null) {
+        orgIdentifier = InputUtils.getValidInput(
+          fieldName: "Organization identifier",
+          argValue: argResults!['org'],
+          promptMessage: "", // Not used when argValue is provided
+          validator: Validators.validateOrgIdentifier,
+        );
       }
+
+      if (argResults!['platforms'] != null) {
+        final platformsInput = InputUtils.getValidInput(
+          fieldName: "Enabled platforms",
+          argValue: argResults!['platforms'],
+          promptMessage: "", // Not used when argValue is provided
+          validator: Validators.validatePlatforms,
+        );
+        enabledPlatforms = platformsInput.split(',');
+      }
+
+      // Create and save the config
+      final config = NeoConfig(
+        organizationIdentifier: orgIdentifier,
+        enabledPlatforms: enabledPlatforms,
+      );
+      await ConfigService.writeConfig(config);
+      print("\n🎉 ${TerminalStyling.success("Neo configuration updated successfully.")}\n");
+      return;
     }
 
+    // Always show prompts in interactive mode
     final orgIdentifier = InputUtils.getValidInput(
       fieldName: "Organization identifier",
-      argValue: argResults!['org'],
+      argValue: null,
+      defaultValue: existingConfig.organizationIdentifier,
       promptMessage:
           "What should be the default organization identifier for new projects? (reverse domain notation, e.g., com.example)",
       validator: Validators.validateOrgIdentifier,
     );
 
+    final platformsInput = InputUtils.getValidInput(
+      fieldName: "Enabled platforms",
+      argValue: null,
+      defaultValue: existingConfig.enabledPlatforms.join(','),
+      promptMessage: "Which platforms should be enabled by default? (comma-separated, e.g., ios,web,macos)",
+      validator: Validators.validatePlatforms,
+    );
+    final enabledPlatforms = platformsInput.split(',');
+
     print(""); // Add spacing between input and tasks
 
     // Get and execute tasks
-    final tasks = _createTasks(orgIdentifier);
+    final tasks = _createTasks(orgIdentifier, enabledPlatforms);
     final success = await _taskRunner.executeTasks(tasks);
 
     if (success) {

@@ -2,32 +2,17 @@
 
 # Change Note
 
-This is an example change note.
-
 ## New 🚀
 
-- Added `command` command. A nice example command
+- Added `--platforms` or `-p` flag to `config` command
+- Added `--platforms` or `-p` flag to `create` command
 
 ## Improvements 💪
 
-- Added `example` flag to `command` for more customizability
-
-## Fixes 🐞
-
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+- Made it so you can change specific configurations
 
 # Internal Change Note
 
-This is an example internal change note
-
 ## Changes 🛠️
 
-- Changed some internal logic
+- Added Cursor rule

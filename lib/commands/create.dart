@@ -1,15 +1,17 @@
 import 'package:args/command_runner.dart';
-import 'dart:io' show Process, File;
 import '../core/task_runner.dart';
 import '../core/styling.dart';
 import '../core/input_utils.dart';
 import '../core/validators.dart';
 import '../core/config_service.dart';
 import '../core/terminal_utils.dart';
-import 'package:path/path.dart' as path;
+import '../core/flutter_service.dart';
+import '../core/package_service.dart';
 
 class CreateCommand extends Command {
   final TaskRunner _taskRunner = TaskRunner();
+  final FlutterService _flutterService = FlutterService();
+  final PackageService _packageService = PackageService();
 
   @override
   String get name => 'create';
@@ -53,8 +55,7 @@ class CreateCommand extends Command {
             projectName,
           ];
 
-          final result = await Process.run('flutter', args);
-
+          final result = await _flutterService.runFlutter(args);
           if (result.exitCode != 0) {
             throw result.stderr.toString();
           }
@@ -65,34 +66,7 @@ class CreateCommand extends Command {
         loadingMessage: 'Adding Neo package...',
         completedMessage: 'Neo package added',
         execute: () async {
-          final pubspecPath = path.join(projectName, 'pubspec.yaml');
-          final pubspecFile = File(pubspecPath);
-
-          if (!await pubspecFile.exists()) {
-            throw 'pubspec.yaml not found in the created project';
-          }
-
-          final content = await pubspecFile.readAsString();
-          final lines = content.split('\n');
-
-          // Find the dependencies section
-          final dependenciesIndex = lines.indexWhere((line) => line.trim() == 'dependencies:');
-          if (dependenciesIndex == -1) {
-            throw 'Could not find dependencies section in pubspec.yaml';
-          }
-
-          // Add neo dependency while preserving indentation
-          final baseIndentation = '  '; // Standard YAML indentation
-          final neoDependency = '''${baseIndentation}neo:
-$baseIndentation  git:
-$baseIndentation    url: git@github.com:tvkcompany/neo.git
-$baseIndentation    ref: production''';
-
-          // Insert the neo dependency after the dependencies: line
-          lines.insert(dependenciesIndex + 1, neoDependency);
-
-          // Write the updated content back to the file
-          await pubspecFile.writeAsString(lines.join('\n'));
+          await _packageService.addNeoPackage(projectName);
         },
       ),
       Task(
@@ -100,39 +74,13 @@ $baseIndentation    ref: production''';
         loadingMessage: 'Installing packages...',
         completedMessage: 'Packages installed successfully',
         execute: () async {
-          final result = await Process.run('flutter', ['pub', 'get'], workingDirectory: projectName);
-
+          final result = await _flutterService.runFlutter(['pub', 'get'], workingDirectory: projectName);
           if (result.exitCode != 0) {
-            final errorOutput = result.stderr.toString().toLowerCase();
-
-            // Check if the error is related to SSH key/authentication
-            if (errorOutput.contains('permission denied (publickey)') ||
-                errorOutput.contains('host key verification failed') ||
-                errorOutput.contains('could not resolve host')) {
-              print(TerminalStyling.warning("\n⚠️ Could not fetch the Neo package due to SSH key configuration issues."));
-              print(TerminalStyling.info(
-                  "Please follow the installation guide at: https://github.com/tvkcompany/neo/blob/production/docs/installation.md"));
-              print(TerminalStyling.info(
-                  "Once your SSH key is properly configured, run 'flutter pub get' in the project directory to fetch the Neo package."));
-              // Don't throw an error, just warn the user
-              return;
-            }
-
-            // For other errors, throw normally
-            throw result.stderr.toString();
+            _packageService.handlePackageInstallError(result.stderr.toString());
           }
         },
       ),
     ];
-  }
-
-  Future<bool> _isFlutterInstalled() async {
-    try {
-      final result = await Process.run('flutter', ['--version']);
-      return result.exitCode == 0;
-    } catch (e) {
-      return false;
-    }
   }
 
   @override
@@ -145,7 +93,7 @@ $baseIndentation    ref: production''';
     }
 
     // Check if Flutter is installed
-    if (!await _isFlutterInstalled()) {
+    if (!await _flutterService.isFlutterInstalled()) {
       print(TerminalStyling.error(
           "\nFlutter is not installed. Please install Flutter first: https://flutter.dev/docs/get-started/install"));
       return;
@@ -163,7 +111,6 @@ $baseIndentation    ref: production''';
     // Get organization identifier
     String orgIdentifier;
     if (argResults!['org'] != null) {
-      // Validate and use the provided override
       orgIdentifier = InputUtils.getValidInput(
         fieldName: "Organization identifier",
         argValue: argResults!['org'],
@@ -184,7 +131,6 @@ $baseIndentation    ref: production''';
     // Get platforms
     List<String> enabledPlatforms;
     if (argResults!['platforms'] != null) {
-      // Validate and use the provided override
       final enabledPlatformsInput = InputUtils.getValidInput(
         fieldName: "Enabled platforms",
         argValue: argResults!['platforms'],
@@ -204,7 +150,6 @@ $baseIndentation    ref: production''';
 
     print(""); // Add spacing between input and tasks
 
-    // Get and execute tasks
     final tasks = _createTasks(projectName, orgIdentifier, enabledPlatforms);
     final success = await _taskRunner.executeTasks(tasks);
 

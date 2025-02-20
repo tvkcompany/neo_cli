@@ -6,10 +6,12 @@ import 'package:path/path.dart' as path;
 class NeoConfig {
   final String organizationIdentifier;
   final List<String> enabledPlatforms;
+  final String defaultTemplate;
 
   NeoConfig({
     this.organizationIdentifier = '',
     this.enabledPlatforms = const [],
+    this.defaultTemplate = '',
   });
 
   /// Creates a config from JSON, handling missing fields for migration support
@@ -17,6 +19,7 @@ class NeoConfig {
     return NeoConfig(
       organizationIdentifier: json['organizationIdentifier'] as String? ?? '',
       enabledPlatforms: json.containsKey('enabledPlatforms') ? List<String>.from(json['enabledPlatforms'] as List) : [],
+      defaultTemplate: json['defaultTemplate'] as String? ?? '',
     );
   }
 
@@ -29,6 +32,9 @@ class NeoConfig {
     if (enabledPlatforms.isNotEmpty) {
       json['enabledPlatforms'] = enabledPlatforms;
     }
+    if (defaultTemplate.isNotEmpty) {
+      json['defaultTemplate'] = defaultTemplate;
+    }
     return json;
   }
 
@@ -37,6 +43,7 @@ class NeoConfig {
     return NeoConfig(
       organizationIdentifier: other.organizationIdentifier.isNotEmpty ? other.organizationIdentifier : organizationIdentifier,
       enabledPlatforms: other.enabledPlatforms.isNotEmpty ? other.enabledPlatforms : enabledPlatforms,
+      defaultTemplate: other.defaultTemplate.isNotEmpty ? other.defaultTemplate : defaultTemplate,
     );
   }
 }

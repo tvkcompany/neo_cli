@@ -1,0 +1,15 @@
+targets:
+  $default:
+    builders:
+      neo_cli|template_builder:
+        enabled: true
+        generate_for:
+          - lib/**
+
+builders:
+  template_builder:
+    import: "package:neo_cli/templates/template_builder.dart"
+    builder_factories: ["templateBuilder"]
+    build_extensions: { r"$lib$": ["templates.g.dart"] }
+    auto_apply: dependents
+    build_to: source

@@ -13,15 +13,16 @@
 
 include: package:lints/recommended.yaml
 
-# Uncomment the following section to specify additional rules.
+analyzer:
+  exclude:
+    - "lib/templates/**/files/**" # Exclude all files in template/*/files directories
 
 # linter:
 #   rules:
-#     - camel_case_types
-
-# analyzer:
-#   exclude:
-#     - path/to/excluded/files/**
+#     - always_declare_return_types
+#     - prefer_single_quotes
+#     - sort_child_properties_last
+#     - unawaited_futures
 
 # For more information about the core and recommended set of lints, see
 # https://dart.dev/go/core-lints

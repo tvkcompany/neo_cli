@@ -97,15 +97,15 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable /bin/sh -c "dart pub get && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
+            docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable /bin/sh -c "dart pub get && dart run build_runner build --delete-conflicting-outputs && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
           else
-            dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+            dart run build_runner build --delete-conflicting-outputs && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
           fi
 
       - name: Build executable (Windows)
         if: runner.os == 'Windows'
         run: |
-          dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          dart run build_runner build --delete-conflicting-outputs && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
 
       - name: Create archive (Unix)
         if: runner.os != 'Windows'

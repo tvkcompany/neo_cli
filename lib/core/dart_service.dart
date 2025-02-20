@@ -4,7 +4,7 @@ import 'dart:io' show Platform, Process, ProcessResult;
 class DartService {
   /// Helper method to run Dart commands consistently across platforms
   Future<ProcessResult> runDart(List<String> args, {String? workingDirectory}) async {
-    final command = Platform.isWindows ? 'dart.exe' : 'dart';
+    final command = Platform.isWindows ? 'dart.bat' : 'dart';
     final result = await Process.run(
       command,
       args,

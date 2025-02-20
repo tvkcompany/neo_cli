@@ -1,20 +1,30 @@
+import '../templates/template_manager.dart';
+
 /// Utility class for input validation
 class Validators {
   /// Validates project name format
-  static String? validateProjectName(String name) {
-    final RegExp snakeCaseRegex = RegExp(r'^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$');
-    if (!snakeCaseRegex.hasMatch(name)) {
-      return "Project name must be in snake_case format (e.g., my_project_name)";
+  static String? validateProjectName(String value) {
+    if (value.isEmpty) {
+      return 'Project name cannot be empty';
     }
+
+    if (!RegExp(r'^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$').hasMatch(value)) {
+      return 'Project name must be in snake_case format (e.g., my_project_name)';
+    }
+
     return null;
   }
 
   /// Validates organization identifier format
-  static String? validateOrgIdentifier(String identifier) {
-    final RegExp reverseDomainRegex = RegExp(r'^[a-z0-9]+(\.[a-z0-9]+)+$');
-    if (!reverseDomainRegex.hasMatch(identifier)) {
-      return "Organization identifier must be in reverse domain notation (e.g., com.example)";
+  static String? validateOrgIdentifier(String value) {
+    if (value.isEmpty) {
+      return 'Organization identifier cannot be empty';
     }
+
+    if (!RegExp(r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$').hasMatch(value)) {
+      return 'Organization identifier must be in reverse domain notation (e.g., com.example)';
+    }
+
     return null;
   }
 
@@ -28,32 +38,32 @@ class Validators {
     'linux',
   ];
 
+  /// Gets a list of all available template names
+  static List<String> get availableTemplates => TemplateManager.availableTemplates.map((t) => t.name).toList();
+
   /// Validates platforms format and values
-  static String? validatePlatforms(String platforms) {
-    if (platforms.isEmpty) {
-      return "Platforms list cannot be empty";
+  static String? validatePlatforms(String value) {
+    if (value.isEmpty) {
+      return 'Platforms list cannot be empty';
     }
 
-    // Check format (comma-separated, no spaces)
-    if (platforms.contains(' ')) {
-      return "Platforms must be comma-separated without spaces (e.g., ios,web,macos)";
+    final platforms = value.split(',').map((p) => p.trim()).toSet();
+    final invalidPlatforms = platforms.difference(validPlatforms.toSet());
+    if (invalidPlatforms.isNotEmpty) {
+      return 'Invalid platform(s): ${invalidPlatforms.join(', ')}. Valid platforms are: ${validPlatforms.join(', ')}';
     }
 
-    final platformList = platforms.split(',');
-    if (platformList.isEmpty) {
-      return "At least one platform must be specified";
+    return null;
+  }
+
+  /// Validates a template name
+  static String? validateTemplate(String value) {
+    if (value.isEmpty) {
+      return 'Template name cannot be empty';
     }
 
-    // Check for duplicates
-    if (platformList.length != platformList.toSet().length) {
-      return "Duplicate platforms are not allowed";
-    }
-
-    // Validate each platform
-    for (final platform in platformList) {
-      if (!validPlatforms.contains(platform)) {
-        return "Invalid platform: $platform. Valid platforms are: ${validPlatforms.join(', ')}";
-      }
+    if (!TemplateManager.isValidTemplate(value)) {
+      return 'Invalid template: $value. Available templates are: ${availableTemplates.join(", ")}';
     }
 
     return null;

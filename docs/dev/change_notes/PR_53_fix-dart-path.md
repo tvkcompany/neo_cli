@@ -2,32 +2,10 @@
 
 # Change Note
 
-This is an example change note.
-
-## New 🚀
-
-- Added `command` command. A nice example command
-
-## Improvements 💪
-
-- Added `example` flag to `command` for more customizability
-
 ## Fixes 🐞
 
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+- Fixed an issue where the Dart path was not being found on Windows when setting up a template
 
 # Internal Change Note
 
-This is an example internal change note
-
-## Changes 🛠️
-
-- Changed some internal logic
+N/A

@@ -2,32 +2,22 @@
 
 # Change Note
 
-This is an example change note.
-
 ## New 🚀
 
-- Added `command` command. A nice example command
+- Added project templates system for generating new projects with predefined structures
+- Added the `simple` template with a basic Flutter + Neo app structure
 
 ## Improvements 💪
 
-- Added `example` flag to `command` for more customizability
-
-## Fixes 🐞
-
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+- Enhanced `create` command to support template-based project generation
+- Added configuration system for managing template settings
+- Improved project validation and error handling
 
 # Internal Change Note
 
-This is an example internal change note
-
 ## Changes 🛠️
 
-- Changed some internal logic
+- Introduced new template-related services and classes
+- Refactored project creation logic to use the new template system
+- Updated build configuration and workflow files
+- Added template variable validation system

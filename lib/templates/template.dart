@@ -26,9 +26,6 @@ class Template {
     this.files = const {},
   });
 
-  /// Gets the path to this template's files relative to the current directory
-  String get filesPath => path.join(Directory.current.path, 'lib/templates/$name/files');
-
   /// Whether this is the base template
   bool get isBase => name == 'base';
 

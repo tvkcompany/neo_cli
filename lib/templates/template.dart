@@ -26,9 +26,6 @@ class Template {
     this.files = const {},
   });
 
-  /// Gets the path to this template's files relative to the current directory
-  String get filesPath => path.join(Directory.current.path, 'lib/templates/$name/files');
-
   /// Whether this is the base template
   bool get isBase => name == 'base';
 
@@ -40,22 +37,37 @@ class Template {
   ///
   /// Throws if the file cannot be created or if any variable is invalid
   Future<void> createFile(String relativePath, String projectPath, Map<String, String> variables) async {
+    print('[DEBUG] Creating file: $relativePath in $projectPath');
+    print('[DEBUG] Template: $name');
+    print('[DEBUG] Available files in template: ${files.keys.join(', ')}');
+
     final content = files[relativePath];
-    if (content == null) return;
+    if (content == null) {
+      print('[DEBUG] No content found for $relativePath');
+      return;
+    }
 
     // Validate variables
     for (final key in variables.keys) {
       if (!TemplateVariable.isValidPlaceholder(key)) {
-        throw ArgumentError(
-            'Invalid template variable: $key. Available variables: ${TemplateVariable.availablePlaceholders.join(", ")}');
+        final error =
+            'Invalid template variable: $key. Available variables: ${TemplateVariable.availablePlaceholders.join(", ")}';
+        print('[DEBUG] Variable validation failed: $error');
+        throw ArgumentError(error);
       }
     }
 
     final destinationPath = path.join(projectPath, relativePath);
     final destFile = File(destinationPath);
 
-    // Create parent directories if they don't exist
-    await destFile.parent.create(recursive: true);
+    print('[DEBUG] Creating directories for: ${destFile.parent.path}');
+    try {
+      // Create parent directories if they don't exist
+      await destFile.parent.create(recursive: true);
+    } catch (e) {
+      print('[DEBUG] Failed to create directories: $e');
+      rethrow;
+    }
 
     // Process content with variables
     String processedContent = content;
@@ -63,8 +75,15 @@ class Template {
       processedContent = processedContent.replaceAll('{{${entry.key}}}', entry.value);
     }
 
-    // Write the file
-    await destFile.writeAsString(processedContent);
+    print('[DEBUG] Writing file: ${destFile.path}');
+    try {
+      // Write the file
+      await destFile.writeAsString(processedContent);
+      print('[DEBUG] Successfully wrote file: ${destFile.path}');
+    } catch (e) {
+      print('[DEBUG] Failed to write file: $e');
+      rethrow;
+    }
   }
 
   /// Validates that all template variables in all files are valid

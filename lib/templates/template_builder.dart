@@ -17,7 +17,6 @@ class TemplateBuilder implements Builder {
   Future<void> build(BuildStep buildStep) async {
     log.info('Starting template build...');
     final templateDirs = await _findTemplateDirs(buildStep);
-    log.info('Found template directories: $templateDirs');
     final buffer = StringBuffer();
 
     // Write file header
@@ -56,9 +55,8 @@ class TemplateBuilder implements Builder {
 
   Future<List<String>> _findTemplateDirs(BuildStep buildStep) async {
     final dirs = <String>[];
-    log.info('Looking for template config files...');
+    // Use forward slashes for glob patterns
     await for (final input in buildStep.findAssets(Glob('lib/templates/*/config.dart'))) {
-      log.info('Found config file: ${input.path}');
       final dir = path.dirname(input.path);
       if (!dirs.contains(dir)) dirs.add(dir);
     }
@@ -75,12 +73,15 @@ class TemplateBuilder implements Builder {
     buffer.writeln('  static const Map<String, String> _${templateName}Files = {');
 
     // Add template files
-    final filesDir = path.join(templateDir, 'files');
+    // Always use forward slashes for glob patterns
+    final filesDir = path.join(templateDir, 'files').replaceAll(r'\', '/');
+
     await for (final file in buildStep.findAssets(Glob('$filesDir/**'))) {
-      final relativePath = path.relative(file.path, from: filesDir);
+      // Always normalize paths to use forward slashes
+      final normalizedPath = path.relative(file.path, from: filesDir).replaceAll(r'\', '/');
       final content = await buildStep.readAsString(file);
 
-      buffer.writeln("    '$relativePath': '''");
+      buffer.writeln("    '$normalizedPath': '''");
       buffer.writeln(content);
       buffer.writeln("''',");
     }
@@ -88,7 +89,7 @@ class TemplateBuilder implements Builder {
     buffer.writeln();
 
     // Read config file
-    final configAsset = AssetId(buildStep.inputId.package, '$templateDir/config.dart');
+    final configAsset = AssetId(buildStep.inputId.package, '$templateDir/config.dart'.replaceAll(r'\', '/'));
     final configContent = await buildStep.readAsString(configAsset);
 
     // Extract dependencies using more robust regex

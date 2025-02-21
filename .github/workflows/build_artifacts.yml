@@ -32,9 +32,12 @@ jobs:
             platform: macos
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true
+          submodules: true
 
       - name: Get SDK version from pubspec.yaml (Unix)
         if: runner.os != 'Windows'

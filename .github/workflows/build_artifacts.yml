@@ -32,7 +32,33 @@ jobs:
             platform: macos
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history and tags
+          lfs: true # Enable Git LFS
+          submodules: true # Fetch submodules if any
+
+      - name: Verify template files (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Write-Host "Verifying template files structure..."
+          if (Test-Path "lib/templates/base/files") {
+            Write-Host "Base template files directory exists"
+            Get-ChildItem "lib/templates/base/files" -Recurse | ForEach-Object {
+              Write-Host $_.FullName
+            }
+          } else {
+            Write-Host "Base template files directory missing!"
+          }
+          if (Test-Path "lib/templates/simple/files") {
+            Write-Host "Simple template files directory exists"
+            Get-ChildItem "lib/templates/simple/files" -Recurse | ForEach-Object {
+              Write-Host $_.FullName
+            }
+          } else {
+            Write-Host "Simple template files directory missing!"
+          }
 
       - name: Get SDK version from pubspec.yaml (Unix)
         if: runner.os != 'Windows'
@@ -105,7 +131,20 @@ jobs:
       - name: Build executable (Windows)
         if: runner.os == 'Windows'
         run: |
-          dart run build_runner build --delete-conflicting-outputs && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
+          Write-Host "Running build_runner in verbose mode..."
+          dart run build_runner build --delete-conflicting-outputs --verbose
+
+          Write-Host "Verifying generated files..."
+          if (Test-Path "lib/templates.g.dart") {
+            Write-Host "Content of templates.g.dart:"
+            Get-Content "lib/templates.g.dart"
+          } else {
+            Write-Host "templates.g.dart not found!"
+            exit 1
+          }
+
+          Write-Host "Building executable..."
+          dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}
 
       - name: Create archive (Unix)
         if: runner.os != 'Windows'

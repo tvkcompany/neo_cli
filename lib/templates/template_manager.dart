@@ -1,4 +1,3 @@
-import '../core/styling.dart';
 import 'template.dart';
 import '../templates.g.dart';
 
@@ -14,23 +13,41 @@ class TemplateManager {
   /// Validates all templates and returns them if valid
   /// Throws if any template is invalid
   static List<Template> _validateTemplates(List<Template> templates) {
+    print('[DEBUG] Validating templates');
+    print('[DEBUG] Number of templates found: ${templates.length}');
+
     // Ensure we have a base template
     if (!templates.any((t) => t.isBase)) {
+      print('[ERROR] No base template found in templates');
       throw StateError('No base template found in templates');
+    }
+
+    // Log template information
+    for (final template in templates) {
+      print('[DEBUG] Template: ${template.name}');
+      print('[DEBUG] Files in template: ${template.files.length}');
+      print('[DEBUG] Files: ${template.files.keys.join(', ')}');
     }
 
     // Ensure all template names are unique and not empty
     final names = templates.map((t) => t.name);
     if (names.any((name) => name.isEmpty)) {
+      print('[ERROR] Empty template name found');
       throw StateError('Template names cannot be empty');
     }
     if (names.toSet().length != names.length) {
+      print('[ERROR] Duplicate template names found');
       throw StateError('Duplicate template names found');
     }
 
     // Validate template variables in all templates
     for (final template in templates) {
-      template.validateTemplateVariables();
+      try {
+        template.validateTemplateVariables();
+      } catch (e) {
+        print('[ERROR] Template validation failed for ${template.name}: $e');
+        rethrow;
+      }
     }
 
     return templates;
@@ -78,22 +95,37 @@ class TemplateManager {
     required String projectPath,
     required Map<String, String> variables,
   }) async {
-    final baseTemplate = templates.firstWhere((t) => t.isBase);
+    print('[DEBUG] Starting template application');
+    print('[DEBUG] Project path: $projectPath');
+    print('[DEBUG] Template name: ${template.name}');
+    print('[DEBUG] Template files count: ${template.files.length}');
 
-    // Apply base template first
-    await _applyTemplateFiles(
-      template: baseTemplate,
-      projectPath: projectPath,
-      variables: variables,
-    );
+    try {
+      final baseTemplate = templates.firstWhere((t) => t.isBase);
+      print('[DEBUG] Base template files count: ${baseTemplate.files.length}');
 
-    // Apply selected template if not base
-    if (!template.isBase) {
+      // Apply base template first
+      print('[DEBUG] Applying base template');
       await _applyTemplateFiles(
-        template: template,
+        template: baseTemplate,
         projectPath: projectPath,
         variables: variables,
       );
+
+      // Apply selected template if not base
+      if (!template.isBase) {
+        print('[DEBUG] Applying ${template.name} template');
+        await _applyTemplateFiles(
+          template: template,
+          projectPath: projectPath,
+          variables: variables,
+        );
+      }
+    } catch (e, stackTrace) {
+      print('[ERROR] Failed to apply template:');
+      print('[ERROR] Error: $e');
+      print('[ERROR] Stack trace: $stackTrace');
+      rethrow;
     }
   }
 
@@ -121,12 +153,18 @@ class TemplateManager {
     required String projectPath,
     required Map<String, String> variables,
   }) async {
+    print('[DEBUG] Applying template files for: ${template.name}');
+    print('[DEBUG] Files to create: ${template.files.keys.join(', ')}');
+
     for (final entry in template.files.entries) {
       final relativePath = entry.key;
       try {
         await template.createFile(relativePath, projectPath, variables);
-      } catch (e) {
-        print(TerminalStyling.error("Error creating $relativePath: $e"));
+      } catch (e, stackTrace) {
+        print('[ERROR] Failed to create $relativePath:');
+        print('[ERROR] Error: $e');
+        print('[ERROR] Stack trace: $stackTrace');
+        rethrow;
       }
     }
   }

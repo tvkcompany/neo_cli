@@ -76,11 +76,16 @@ class TemplateBuilder implements Builder {
 
     // Add template files
     final filesDir = path.join(templateDir, 'files');
+    log.info('Looking for files in: $filesDir');
+
     await for (final file in buildStep.findAssets(Glob('$filesDir/**'))) {
-      final relativePath = path.relative(file.path, from: filesDir);
+      // Normalize the path to use forward slashes regardless of platform
+      final normalizedPath = path.relative(file.path, from: filesDir).replaceAll(r'\', '/');
+      log.info('Processing file: $normalizedPath');
+
       final content = await buildStep.readAsString(file);
 
-      buffer.writeln("    '$relativePath': '''");
+      buffer.writeln("    '$normalizedPath': '''");
       buffer.writeln(content);
       buffer.writeln("''',");
     }

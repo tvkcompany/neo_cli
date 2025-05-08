@@ -2,32 +2,12 @@
 
 # Change Note
 
-This is an example change note.
+We've got a new template!
 
 ## New 🚀
 
-- Added `command` command. A nice example command
-
-## Improvements 💪
-
-- Added `example` flag to `command` for more customizability
-
-## Fixes 🐞
-
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+- Added the `sidebar` template. This will be expanded to be more complex but for now its a nice and simple starter template with our new `NeoSidebarLaout`
 
 # Internal Change Note
 
-This is an example internal change note
-
-## Changes 🛠️
-
-- Changed some internal logic
+N/A

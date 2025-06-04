@@ -11,10 +11,14 @@ on:
         required: true
         type: string
         description: "Package manager to update (homebrew or scoop)"
-      macos_hash:
+      macos_amd64_hash:
         required: false
         type: string
-        description: "SHA256 hash for macOS binary"
+        description: "SHA256 hash for macOS Intel binary"
+      macos_arm64_hash:
+        required: false
+        type: string
+        description: "SHA256 hash for macOS ARM64 binary"
       linux_amd64_hash:
         required: false
         type: string
@@ -83,8 +87,13 @@ jobs:
             license "Proprietary"
 
             on_macos do
-              url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz"
-              sha256 "${{ inputs.macos_hash }}"
+              if Hardware::CPU.intel?
+                url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_macos_amd64.tar.gz"
+                sha256 "${{ inputs.macos_amd64_hash }}"
+              else
+                url "https://github.com/tvkcompany/neo_cli/releases/download/${VERSION}/neo_cli_${SAFE_VERSION}_macos_arm64.tar.gz"
+                sha256 "${{ inputs.macos_arm64_hash }}"
+              end
             end
 
             on_linux do

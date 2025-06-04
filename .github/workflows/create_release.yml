@@ -46,7 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.create-release.outputs.release_created }}
-      macos_hash: ${{ steps.extract-hashes.outputs.macos_hash }}
+      macos_amd64_hash: ${{ steps.extract-hashes.outputs.macos_amd64_hash }}
+      macos_arm64_hash: ${{ steps.extract-hashes.outputs.macos_arm64_hash }}
       linux_amd64_hash: ${{ steps.extract-hashes.outputs.linux_amd64_hash }}
       linux_arm64_hash: ${{ steps.extract-hashes.outputs.linux_arm64_hash }}
       windows_amd64_hash: ${{ steps.extract-hashes.outputs.windows_amd64_hash }}
@@ -91,7 +92,8 @@ jobs:
             "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/neo_cli_${SAFE_VERSION}_linux_amd64.tar.gz"
             "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/neo_cli_${SAFE_VERSION}_linux_arm64.tar.gz"
             "artifacts/neo_cli_${SAFE_VERSION}_windows_amd64/neo_cli_${SAFE_VERSION}_windows_amd64.zip"
-            "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/neo_cli_${SAFE_VERSION}_macos_universal.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_macos_amd64/neo_cli_${SAFE_VERSION}_macos_amd64.tar.gz"
+            "artifacts/neo_cli_${SAFE_VERSION}_macos_arm64/neo_cli_${SAFE_VERSION}_macos_arm64.tar.gz"
           )
 
           for file in "${FILES[@]}"; do
@@ -112,19 +114,21 @@ jobs:
           SAFE_VERSION=$(echo $VERSION | tr '.' '_')
 
           # Extract SHA256 hashes for each platform
-          MACOS_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_macos_universal/sha256sum.txt" | cut -d ' ' -f 1)
+          MACOS_AMD64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_macos_amd64/sha256sum.txt" | cut -d ' ' -f 1)
+          MACOS_ARM64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_macos_arm64/sha256sum.txt" | cut -d ' ' -f 1)
           LINUX_AMD64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_linux_amd64/sha256sum.txt" | cut -d ' ' -f 1)
           LINUX_ARM64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_linux_arm64/sha256sum.txt" | cut -d ' ' -f 1)
           WINDOWS_AMD64_HASH=$(cat "artifacts/neo_cli_${SAFE_VERSION}_windows_amd64/sha256sum.txt" | cut -d ' ' -f 1)
 
           # Validate that we found all hashes
-          if [ -z "$MACOS_HASH" ] || [ -z "$LINUX_AMD64_HASH" ] || [ -z "$LINUX_ARM64_HASH" ] || [ -z "$WINDOWS_AMD64_HASH" ]; then
+          if [ -z "$MACOS_AMD64_HASH" ] || [ -z "$MACOS_ARM64_HASH" ] || [ -z "$LINUX_AMD64_HASH" ] || [ -z "$LINUX_ARM64_HASH" ] || [ -z "$WINDOWS_AMD64_HASH" ]; then
             echo "Error: Failed to extract one or more hashes"
             exit 1
           fi
 
           # Set outputs for use in next steps
-          echo "macos_hash=$MACOS_HASH" >> $GITHUB_OUTPUT
+          echo "macos_amd64_hash=$MACOS_AMD64_HASH" >> $GITHUB_OUTPUT
+          echo "macos_arm64_hash=$MACOS_ARM64_HASH" >> $GITHUB_OUTPUT
           echo "linux_amd64_hash=$LINUX_AMD64_HASH" >> $GITHUB_OUTPUT
           echo "linux_arm64_hash=$LINUX_ARM64_HASH" >> $GITHUB_OUTPUT
           echo "windows_amd64_hash=$WINDOWS_AMD64_HASH" >> $GITHUB_OUTPUT
@@ -142,7 +146,8 @@ jobs:
             artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64/neo_cli_${{ env.SAFE_VERSION }}_linux_amd64.tar.gz
             artifacts/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64/neo_cli_${{ env.SAFE_VERSION }}_linux_arm64.tar.gz
             artifacts/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64/neo_cli_${{ env.SAFE_VERSION }}_windows_amd64.zip
-            artifacts/neo_cli_${{ env.SAFE_VERSION }}_macos_universal/neo_cli_${{ env.SAFE_VERSION }}_macos_universal.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_macos_amd64/neo_cli_${{ env.SAFE_VERSION }}_macos_amd64.tar.gz
+            artifacts/neo_cli_${{ env.SAFE_VERSION }}_macos_arm64/neo_cli_${{ env.SAFE_VERSION }}_macos_arm64.tar.gz
 
       - name: Set release status
         id: release-status
@@ -154,7 +159,8 @@ jobs:
     with:
       version: ${{ needs.extract-version.outputs.version }}
       package_manager: homebrew
-      macos_hash: ${{ needs.create-release.outputs.macos_hash }}
+      macos_amd64_hash: ${{ needs.create-release.outputs.macos_amd64_hash }}
+      macos_arm64_hash: ${{ needs.create-release.outputs.macos_arm64_hash }}
       linux_amd64_hash: ${{ needs.create-release.outputs.linux_amd64_hash }}
       linux_arm64_hash: ${{ needs.create-release.outputs.linux_arm64_hash }}
     secrets:

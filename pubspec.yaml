@@ -3,7 +3,7 @@ description: The Neo CLI. Your gateway to experiencing Flutter app development w
 version: 1.0.0
 
 environment:
-  sdk: ^3.6.1
+  sdk: ^3.8.0
 
 executables:
   neo: neo_cli

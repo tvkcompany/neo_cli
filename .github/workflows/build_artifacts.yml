@@ -26,9 +26,13 @@ jobs:
           - os: windows-latest
             arch: amd64
             platform: windows
-          # macOS (universal binary - works on both Intel and Apple Silicon)
-          - os: macos-latest
-            arch: universal
+          # macOS Intel
+          - os: macos-13 # macos-13 runs on Intel
+            arch: amd64
+            platform: macos
+          # macOS Apple Silicon
+          - os: macos-latest # macos-latest runs on Apple Silicon
+            arch: arm64
             platform: macos
 
     steps:
@@ -99,7 +103,7 @@ jobs:
       - name: Build executable (Unix)
         if: runner.os != 'Windows'
         run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
+          if [ "${{ matrix.arch }}" = "arm64" ] && [ "${{ matrix.platform }}" = "linux" ]; then
             docker run --rm --platform linux/arm64 --volume "${PWD}:/work" --workdir /work dart:stable /bin/sh -c "dart pub get && dart run build_runner build --delete-conflicting-outputs && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}"
           else
             dart run build_runner build --delete-conflicting-outputs && dart compile exe bin/neo_cli.dart -o ${{ steps.set-filename-unix.outputs.output_name || steps.set-filename-windows.outputs.output_name }}

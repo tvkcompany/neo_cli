@@ -2,32 +2,10 @@
 
 # Change Note
 
-This is an example change note.
-
-## New 🚀
-
-- Added `command` command. A nice example command
-
-## Improvements 💪
-
-- Added `example` flag to `command` for more customizability
-
-## Fixes 🐞
-
-- Fixed an issue in `command` that caused crashes if the input was empty
-
-## Deprecated ⛔
-
-- Deprecated `old command` in favor of `new command`
-
-## Removed ❌
-
-- Removed `command`
+Fixed an issue where the CLI wouldn't run on CPU types other than Apple Silicon.
 
 # Internal Change Note
 
-This is an example internal change note
-
 ## Changes 🛠️
 
-- Changed some internal logic
+- Separated macOS builds into distinct jobs for Intel (AMD64) and Apple Silicon (ARM64) architectures

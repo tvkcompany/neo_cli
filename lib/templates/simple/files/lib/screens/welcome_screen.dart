@@ -18,25 +18,20 @@ class WelcomeScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                "Welcome to Neo",
-                style: theme.textStyles.header1.copyWith(
-                  color: theme.colors.fgPrimary,
-                ),
-              ),
+              Text("Welcome to Neo", style: theme.textStyles.header1.copyWith(color: theme.colors.fgPrimary)),
               Gap(theme.spacings.medium),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   NeoButton(
                     variant: NeoButtonVariant.outlined,
-                    text: "Learn more",
+                    label: "Learn more",
                     onPressed: () {},
                   ),
                   Gap(theme.spacings.small),
                   NeoButton(
                     variant: NeoButtonVariant.filled,
-                    text: "Get started",
+                    label: "Get started",
                     onPressed: () {},
                   ),
                 ],

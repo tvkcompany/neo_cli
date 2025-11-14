@@ -5,9 +5,11 @@
 *.swp
 .DS_Store
 .atom/
+.build/
 .buildlog/
 .history
 .svn/
+.swiftpm/
 migrate_working_dir/
 
 # IntelliJ related
@@ -38,3 +40,9 @@ build/
 **/*.gr.dart
 **/*.freezed.dart
 **/*.tailor.dart
+
+# FVM Version Cache
+.fvm/
+
+# Cursor related
+.cursor/mcp.json

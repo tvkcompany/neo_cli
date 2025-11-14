@@ -9,6 +9,7 @@ import '../core/flutter_service.dart';
 import '../core/dart_service.dart';
 import '../core/package_service.dart';
 import '../core/pubspec_service.dart';
+import '../core/analysis_options_service.dart';
 import '../templates/template_manager.dart';
 import '../templates/template.dart';
 import '../templates/template_variables.dart';
@@ -19,6 +20,7 @@ class CreateCommand extends Command {
   final DartService _dartService = DartService();
   final PackageService _packageService = PackageService();
   final PubspecService _pubspecService = PubspecService();
+  final AnalysisOptionsService _analysisOptionsService = AnalysisOptionsService();
 
   @override
   String get name => 'create';
@@ -27,26 +29,14 @@ class CreateCommand extends Command {
   String get description => 'Create a new Flutter project using Neo';
 
   CreateCommand() {
-    argParser.addOption(
-      'name',
-      abbr: 'n',
-      help: 'Name of the project to create',
-    );
-    argParser.addOption(
-      'org',
-      abbr: 'o',
-      help: 'Organization identifier in reverse domain notation (e.g., com.example)',
-    );
+    argParser.addOption('name', abbr: 'n', help: 'Name of the project to create');
+    argParser.addOption('org', abbr: 'o', help: 'Organization identifier in reverse domain notation (e.g., com.example)');
     argParser.addOption(
       'platforms',
       abbr: 'p',
-      help: 'Comma-separated list of platforms to enable (e.g., ios,web,macos)',
+      help: 'Comma-separated list of platforms to enable (no spaces, e.g., ios,web,macos)',
     );
-    argParser.addOption(
-      'template',
-      abbr: 't',
-      help: 'Template to use for project creation',
-    );
+    argParser.addOption('template', abbr: 't', help: 'Template to use for project creation');
   }
 
   List<Task> _createTasks(String projectName, String orgIdentifier, List<String> enabledPlatforms, Template template) {
@@ -83,6 +73,9 @@ class CreateCommand extends Command {
           // Update pubspec.yaml with Neo configurations
           await _pubspecService.updatePubspec(projectName);
 
+          // Update analysis_options.yaml with Neo configurations
+          await _analysisOptionsService.updateAnalysisOptions(projectName);
+
           // Install Neo package
           final result = await _flutterService.runFlutter(['pub', 'get'], workingDirectory: projectName);
           if (result.exitCode != 0) {
@@ -100,10 +93,7 @@ class CreateCommand extends Command {
 
           // Install regular dependencies in one command
           if (packages.regular.isNotEmpty) {
-            final result = await _flutterService.runFlutter(
-              ['pub', 'add', ...packages.regular],
-              workingDirectory: projectName,
-            );
+            final result = await _flutterService.runFlutter(['pub', 'add', ...packages.regular], workingDirectory: projectName);
             if (result.exitCode != 0) {
               throw result.stderr.toString();
             }
@@ -111,10 +101,12 @@ class CreateCommand extends Command {
 
           // Install dev dependencies in one command
           if (packages.dev.isNotEmpty) {
-            final result = await _flutterService.runFlutter(
-              ['pub', 'add', '--dev', ...packages.dev],
-              workingDirectory: projectName,
-            );
+            final result = await _flutterService.runFlutter([
+              'pub',
+              'add',
+              '--dev',
+              ...packages.dev,
+            ], workingDirectory: projectName);
             if (result.exitCode != 0) {
               throw result.stderr.toString();
             }
@@ -124,26 +116,29 @@ class CreateCommand extends Command {
           await TemplateManager.applyTemplate(
             template: template,
             projectPath: projectName,
-            variables: TemplateVariable.createVariableMap(
-              projectName: projectName,
-            ),
+            variables: TemplateVariable.createVariableMap(projectName: projectName),
           );
 
           // Run pub get to ensure all dependencies are properly installed
           final result = await _flutterService.runFlutter(['pub', 'get'], workingDirectory: projectName);
           if (result.exitCode != 0) {
             print(TerminalStyling.warning("\n⚠️ Some packages could not be installed completely."));
-            print(TerminalStyling.info(
-                "You may need to run 'flutter pub get' manually in the project directory to resolve any remaining issues."));
+            print(
+              TerminalStyling.info(
+                "You may need to run 'flutter pub get' manually in the project directory to resolve any remaining issues.",
+              ),
+            );
             print(TerminalStyling.info("Error details: ${result.stderr}"));
             // Don't throw, just continue
           }
 
           // Run build runner to generate code
-          final buildResult = await _dartService.runDart(
-            ['run', 'build_runner', 'build', '--delete-conflicting-outputs'],
-            workingDirectory: projectName,
-          );
+          final buildResult = await _dartService.runDart([
+            'run',
+            'build_runner',
+            'build',
+            '--delete-conflicting-outputs',
+          ], workingDirectory: projectName);
           if (buildResult.exitCode != 0) {
             print(TerminalStyling.warning("\n⚠️ Code generation could not be completed."));
             print(TerminalStyling.info("You may need to run 'dart run build_runner build' manually in the project directory."));
@@ -166,8 +161,11 @@ class CreateCommand extends Command {
 
     // Check if Flutter is installed
     if (!await _flutterService.isFlutterInstalled()) {
-      print(TerminalStyling.error(
-          "\nFlutter is not installed. Please install Flutter first: https://flutter.dev/docs/get-started/install"));
+      print(
+        TerminalStyling.error(
+          "\nFlutter is not installed. Please install Flutter first: https://flutter.dev/docs/get-started/install",
+        ),
+      );
       return;
     }
 
@@ -192,52 +190,34 @@ class CreateCommand extends Command {
     } else {
       if (config.organizationIdentifier.isEmpty) {
         print(
-            TerminalStyling.error("\nNo organization identifier found in configuration. Please run 'neo config' to set it up."));
+          TerminalStyling.error("\nNo organization identifier found in configuration. Please run 'neo config' to set it up."),
+        );
         return;
       }
       orgIdentifier = config.organizationIdentifier;
-      print(TerminalStyling.info("\nUsing configured organization identifier: ") +
-          TerminalStyling.colorBold(orgIdentifier, TerminalStyling.cyan));
+      print(
+        TerminalStyling.info("\nUsing configured organization identifier: ") +
+            TerminalStyling.colorBold(orgIdentifier, TerminalStyling.cyan),
+      );
     }
 
     // Get platforms
-    List<String> enabledPlatforms;
-    if (argResults!['platforms'] != null) {
-      final enabledPlatformsInput = InputUtils.getValidInput(
-        fieldName: "Enabled platforms",
-        argValue: argResults!['platforms'],
-        promptMessage: "", // Not used when argValue is provided
-        validator: Validators.validatePlatforms,
-      );
-      enabledPlatforms = enabledPlatformsInput.split(',');
-    } else {
-      if (config.enabledPlatforms.isEmpty) {
-        print(TerminalStyling.error("\nNo enabled platforms found in configuration. Please run 'neo config' to set them up."));
-        return;
-      }
-      enabledPlatforms = config.enabledPlatforms;
-      print(TerminalStyling.info("\nUsing configured enabled platforms: ") +
-          TerminalStyling.colorBold(enabledPlatforms.join(','), TerminalStyling.cyan));
-    }
+    final enabledPlatformsInput = InputUtils.getValidInput(
+      fieldName: "Enabled platforms",
+      argValue: argResults!['platforms'],
+      promptMessage:
+          "Which platforms should be enabled? (comma-separated list with no spaces, available: ${Validators.validPlatforms.join(", ")})",
+      validator: Validators.validatePlatforms,
+    );
+    final enabledPlatforms = enabledPlatformsInput.split(',');
 
     // Get template
-    String templateName;
-    if (argResults!['template'] != null) {
-      templateName = InputUtils.getValidInput(
-        fieldName: "Template",
-        argValue: argResults!['template'],
-        promptMessage: "", // Not used when argValue is provided
-        validator: Validators.validateTemplate,
-      );
-    } else {
-      if (config.defaultTemplate.isEmpty) {
-        print(TerminalStyling.error("\nNo default template found in configuration. Please run 'neo config' to set it up."));
-        return;
-      }
-      templateName = config.defaultTemplate;
-      print(
-          TerminalStyling.info("\nUsing configured template: ") + TerminalStyling.colorBold(templateName, TerminalStyling.cyan));
-    }
+    final templateName = InputUtils.getValidInput(
+      fieldName: "Template",
+      argValue: argResults!['template'],
+      promptMessage: "Which template should be used? (available: ${Validators.availableTemplates.join(", ")})",
+      validator: Validators.validateTemplate,
+    );
 
     final template = TemplateManager.getTemplate(templateName);
 
@@ -248,7 +228,8 @@ class CreateCommand extends Command {
 
     if (success) {
       print(
-          "\n🎉 ${TerminalStyling.success("Neo project")} ${TerminalStyling.colorBold(projectName, TerminalStyling.cyan)} ${TerminalStyling.success("created. Welcome to the future.")}\n");
+        "\n🎉 ${TerminalStyling.success("Neo project")} ${TerminalStyling.colorBold(projectName, TerminalStyling.cyan)} ${TerminalStyling.success("created. Welcome to the future.")}\n",
+      );
     }
   }
 }

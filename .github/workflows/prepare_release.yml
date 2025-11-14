@@ -188,21 +188,8 @@ jobs:
           fi
           echo "::notice::Updated version in constants.dart"
 
-          # Create release notes directories if they don't exist
-          mkdir -p "docs/release_notes"
+          # Create internal release notes directory if it doesn't exist
           mkdir -p "docs/dev/internal_release_notes"
-
-          # Create release note
-          NOTE_FILE="docs/release_notes/$VERSION.md"
-          if [ ! -f "$NOTE_FILE" ]; then
-            if ! cp .github/templates/release_note_template.md "$NOTE_FILE"; then
-              echo "::error::Failed to create release notes from template"
-              exit 1
-            fi
-            echo "::notice::Created release note file at $NOTE_FILE"
-          else
-            echo "::notice::Release note file already exists at $NOTE_FILE, skipping creation"
-          fi
 
           # Create internal release note
           INTERNAL_NOTE_FILE="docs/dev/internal_release_notes/$VERSION.md"
@@ -217,7 +204,6 @@ jobs:
           fi
 
           # Set outputs for comment step
-          echo "note_file=$NOTE_FILE" >> $GITHUB_OUTPUT
           echo "internal_note_file=$INTERNAL_NOTE_FILE" >> $GITHUB_OUTPUT
 
           # Configure git
@@ -229,27 +215,25 @@ jobs:
             echo "::notice::No changes to commit"
           else
             # Commit and push changes
-            git add pubspec.yaml lib/core/constants.dart "$NOTE_FILE" "$INTERNAL_NOTE_FILE"
+            git add pubspec.yaml lib/core/constants.dart "$INTERNAL_NOTE_FILE"
             git commit -m "Prepared release $VERSION"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push
             echo "::notice::Changes committed and pushed"
           fi
 
-      - name: Add release notes reminder
+      - name: Add internal release notes reminder
         uses: actions/github-script@v7
         with:
           script: |
-            const noteFile = '${{ steps.prepare-files.outputs.note_file }}';
             const internalNoteFile = '${{ steps.prepare-files.outputs.internal_note_file }}';
             const version = '${{ needs.validate-version.outputs.version }}';
 
             const comment = `
-            📝 Release notes have been created for version ${version}!
+            📝 Internal release notes have been created for version ${version}!
 
             Please edit:
-            1. \`${noteFile}\` - User-facing changes
-            2. \`${internalNoteFile}\` - Internal changes
+            \`${internalNoteFile}\` - Internal changes
 
             > **💡 Tip**: Click the \`Cleaned up change notes\` commit to see the change notes for this release.
             These were created for each PR and contain detailed changes. This helps compile the release notes.

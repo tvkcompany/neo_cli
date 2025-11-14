@@ -1,7 +1,7 @@
 # Neo CLI Development Documentation
 
 > [!CAUTION]
-> If you are looking for user documentation on how to use the Neo CLI, please visit the [Neo documentation](https://github.com/tvkcompany/neo/blob/production/docs/README.md).
+> If you are looking for user documentation on how to use the Neo CLI, please visit the [Neo Docs](https://neo.tvk.company/).
 
 This directory contains resources that the TVK team uses during the development of the Neo CLI. The resources in this directory should not be necessary for using the Neo CLI.
 

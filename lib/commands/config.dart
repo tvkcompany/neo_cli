@@ -30,23 +30,9 @@ class ConfigCommand extends Command {
       help: 'Organization identifier in reverse domain notation (e.g., com.example)',
       valueHelp: 'identifier',
     );
-
-    argParser.addOption(
-      'platforms',
-      abbr: 'p',
-      help: 'Comma-separated list of enabled platforms (available: ${Validators.validPlatforms.join(", ")})',
-      valueHelp: 'platforms',
-    );
-
-    argParser.addOption(
-      'template',
-      abbr: 't',
-      help: 'Default template to use for new projects (available: ${Validators.availableTemplates.join(", ")})',
-      valueHelp: 'template',
-    );
   }
 
-  List<Task> _createTasks(String orgIdentifier, List<String> enabledPlatforms, String defaultTemplate) {
+  List<Task> _createTasks(String orgIdentifier) {
     return [
       Task(
         name: 'Configuration',
@@ -55,8 +41,6 @@ class ConfigCommand extends Command {
         execute: () async {
           final config = NeoConfig(
             organizationIdentifier: orgIdentifier,
-            enabledPlatforms: enabledPlatforms,
-            defaultTemplate: defaultTemplate,
           );
           await ConfigService.writeConfig(config);
         },
@@ -73,17 +57,9 @@ class ConfigCommand extends Command {
       final config = await ConfigService.readConfig();
       if (config != null) {
         print("\nConfiguration:");
-        if (config.organizationIdentifier.isNotEmpty) {
-          print(
+      if (config.organizationIdentifier.isNotEmpty) {
+        print(
               "  ${TerminalStyling.info("Organization identifier")}: ${TerminalStyling.colorBold(config.organizationIdentifier, TerminalStyling.cyan)}");
-        }
-        if (config.enabledPlatforms.isNotEmpty) {
-          print(
-              "  ${TerminalStyling.info("Enabled platforms")}: ${TerminalStyling.colorBold(config.enabledPlatforms.join(','), TerminalStyling.cyan)}");
-        }
-        if (config.defaultTemplate.isNotEmpty) {
-          print(
-              "  ${TerminalStyling.info("Default template")}: ${TerminalStyling.colorBold(config.defaultTemplate, TerminalStyling.cyan)}");
         }
         print(""); // Add spacing at the end
         return;
@@ -96,44 +72,17 @@ class ConfigCommand extends Command {
     final existingConfig = await ConfigService.readConfig() ?? NeoConfig();
 
     // If using CLI flags, only configure specified values
-    if (argResults!['org'] != null || argResults!['platforms'] != null || argResults!['template'] != null) {
-      String orgIdentifier = existingConfig.organizationIdentifier;
-      List<String> enabledPlatforms = existingConfig.enabledPlatforms;
-      String defaultTemplate = existingConfig.defaultTemplate;
-
-      if (argResults!['org'] != null) {
-        orgIdentifier = InputUtils.getValidInput(
-          fieldName: "Organization identifier",
-          argValue: argResults!['org'],
-          promptMessage: "", // Not used when argValue is provided
-          validator: Validators.validateOrgIdentifier,
-        );
-      }
-
-      if (argResults!['platforms'] != null) {
-        final platformsInput = InputUtils.getValidInput(
-          fieldName: "Enabled platforms",
-          argValue: argResults!['platforms'],
-          promptMessage: "", // Not used when argValue is provided
-          validator: Validators.validatePlatforms,
-        );
-        enabledPlatforms = platformsInput.split(',');
-      }
-
-      if (argResults!['template'] != null) {
-        defaultTemplate = InputUtils.getValidInput(
-          fieldName: "Default template",
-          argValue: argResults!['template'],
-          promptMessage: "", // Not used when argValue is provided
-          validator: Validators.validateTemplate,
-        );
-      }
+    if (argResults!['org'] != null) {
+      final orgIdentifier = InputUtils.getValidInput(
+        fieldName: "Organization identifier",
+        argValue: argResults!['org'],
+        promptMessage: "", // Not used when argValue is provided
+        validator: Validators.validateOrgIdentifier,
+      );
 
       // Create and save the config
       final config = NeoConfig(
         organizationIdentifier: orgIdentifier,
-        enabledPlatforms: enabledPlatforms,
-        defaultTemplate: defaultTemplate,
       );
       await ConfigService.writeConfig(config);
       print("\n🎉 ${TerminalStyling.success("Neo configuration updated successfully.")}\n");
@@ -150,29 +99,10 @@ class ConfigCommand extends Command {
       validator: Validators.validateOrgIdentifier,
     );
 
-    final platformsInput = InputUtils.getValidInput(
-      fieldName: "Enabled platforms",
-      argValue: null,
-      defaultValue: existingConfig.enabledPlatforms.join(','),
-      promptMessage:
-          "Which platforms should be enabled by default? (comma-separated list, available: ${Validators.validPlatforms.join(", ")})",
-      validator: Validators.validatePlatforms,
-    );
-    final enabledPlatforms = platformsInput.split(',');
-
-    final defaultTemplate = InputUtils.getValidInput(
-      fieldName: "Default template",
-      argValue: null,
-      defaultValue: existingConfig.defaultTemplate,
-      promptMessage:
-          "Which template should be used by default for new projects? (available: ${Validators.availableTemplates.join(", ")})",
-      validator: Validators.validateTemplate,
-    );
-
     print(""); // Add spacing between input and tasks
 
     // Get and execute tasks
-    final tasks = _createTasks(orgIdentifier, enabledPlatforms, defaultTemplate);
+    final tasks = _createTasks(orgIdentifier);
     final success = await _taskRunner.executeTasks(tasks);
 
     if (success) {

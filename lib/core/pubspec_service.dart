@@ -16,16 +16,19 @@ class PubspecService {
     final content = await pubspecFile.readAsString();
     final yamlEditor = YamlEditor(content);
 
+    // Update version
+    yamlEditor.update(['version'], '0.1.0');
+
     // Update SDK version
-    yamlEditor.update(['environment', 'sdk'], '^3.6.0');
+    yamlEditor.update(['environment', 'sdk'], '^3.9.0');
 
     // Add Neo package dependency
-    yamlEditor.update([
-      'dependencies',
-      'neo'
-    ], {
-      'git': {'url': 'git@github.com:tvkcompany/neo.git', 'ref': 'production'}
-    });
+    yamlEditor.update(
+      ['dependencies', 'neo'],
+      {
+        'git': {'url': 'git@github.com:tvkcompany/neo.git', 'ref': 'production'},
+      },
+    );
 
     // Add font configurations
     final fonts = [
@@ -34,15 +37,15 @@ class PubspecService {
         'fonts': [
           {'asset': 'packages/neo/assets/fonts/Inter-Regular.otf', 'weight': 400},
           {'asset': 'packages/neo/assets/fonts/Inter-Medium.otf', 'weight': 500},
-          {'asset': 'packages/neo/assets/fonts/Inter-Bold.otf', 'weight': 700}
-        ]
+          {'asset': 'packages/neo/assets/fonts/Inter-Bold.otf', 'weight': 700},
+        ],
       },
       {
         'family': 'Geist Mono',
         'fonts': [
-          {'asset': 'packages/neo/assets/fonts/GeistMono-Regular.otf', 'weight': 400}
-        ]
-      }
+          {'asset': 'packages/neo/assets/fonts/GeistMono-Regular.otf', 'weight': 400},
+        ],
+      },
     ];
 
     yamlEditor.update(['flutter', 'fonts'], fonts);

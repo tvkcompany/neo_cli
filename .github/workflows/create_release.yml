@@ -139,7 +139,8 @@ jobs:
         with:
           tag_name: ${{ needs.extract-version.outputs.version }}
           name: ${{ needs.extract-version.outputs.version }}
-          body_path: docs/release_notes/${{ needs.extract-version.outputs.version }}.md
+          body: |
+            For complete release notes and detailed information about this version, please visit our **[Neo CLI Release Notes](https://neo.tvk.company/cli/release-notes)**.
           prerelease: ${{ needs.extract-version.outputs.is-prerelease }}
           fail_on_unmatched_files: true
           files: |

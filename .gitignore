@@ -5,6 +5,7 @@
 *.swp
 .DS_Store
 .atom/
+.build/
 .buildlog/
 .history
 .svn/
@@ -38,3 +39,6 @@ build/
 **/*.gr.dart
 **/*.freezed.dart
 **/*.tailor.dart
+
+# Cursor related
+.cursor/mcp.json

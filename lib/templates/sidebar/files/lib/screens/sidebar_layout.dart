@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:neo/layouts/neo_sidebar_layout.dart';
 import 'package:neo/neo.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -29,7 +28,7 @@ class SidebarLayout extends HookConsumerWidget {
       Function()? onPressed,
     }) {
       return NeoSidebarButton(
-        text: text,
+        label: text,
         isActive: activeItem.value == text,
         icon: icon,
         badgeText: badgeText,
@@ -48,21 +47,14 @@ class SidebarLayout extends HookConsumerWidget {
             //   width: 40,
             //   height: 40,
             // ),
-            PhosphorIcon(
-              PhosphorIconsDuotone.floppyDisk,
-              size: 40,
-              color: theme.colors.fgPrimary,
-            ),
+            PhosphorIcon(PhosphorIconsDuotone.floppyDisk, size: 40, color: theme.colors.fgPrimary),
             if (!neoSidebarCurrentStates.hideText) ...[
               Flexible(
                 child: Padding(
                   padding: EdgeInsets.only(left: theme.spacings.extraSmall),
                   child: Text(
                     "Neo",
-                    style: theme.textStyles.header1.copyWith(
-                      color: theme.colors.fgPrimary,
-                      fontSize: 24,
-                    ),
+                    style: theme.textStyles.header1.copyWith(color: theme.colors.fgPrimary, fontSize: 24),
                     overflow: TextOverflow.fade,
                     maxLines: 1,
                     softWrap: false,
@@ -79,21 +71,29 @@ class SidebarLayout extends HookConsumerWidget {
               SingleChildScrollView(
                 child: Column(
                   children: [
-                    buildSidebarButton("Dashboard", icon: PhosphorIcons.squaresFour, onPressed: () {
-                      if (activeItem.value != "Dashboard") {
-                        NeoHaptics.light();
-                        activeItem.value = "Dashboard";
-                        router.push(const DashboardRoute());
-                      }
-                    }),
+                    buildSidebarButton(
+                      "Dashboard",
+                      icon: PhosphorIcons.squaresFour,
+                      onPressed: () {
+                        if (activeItem.value != "Dashboard") {
+                          NeoHaptics.light();
+                          activeItem.value = "Dashboard";
+                          router.push(const DashboardRoute());
+                        }
+                      },
+                    ),
                     Gap(theme.spacings.extraSmall),
-                    buildSidebarButton("Products", icon: PhosphorIcons.tag, onPressed: () {
-                      if (activeItem.value != "Products") {
-                        NeoHaptics.light();
-                        activeItem.value = "Products";
-                        router.push(const ProductsRoute());
-                      }
-                    }),
+                    buildSidebarButton(
+                      "Products",
+                      icon: PhosphorIcons.tag,
+                      onPressed: () {
+                        if (activeItem.value != "Products") {
+                          NeoHaptics.light();
+                          activeItem.value = "Products";
+                          router.push(const ProductsRoute());
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),

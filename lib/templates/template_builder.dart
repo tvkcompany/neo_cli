@@ -80,9 +80,11 @@ class TemplateBuilder implements Builder {
       // Always normalize paths to use forward slashes
       final normalizedPath = path.relative(file.path, from: filesDir).replaceAll(r'\', '/');
       final content = await buildStep.readAsString(file);
+      // Escape ${} sequences to prevent Dart from trying to interpolate them in const context
+      final escapedContent = content.replaceAll(r'${', r'\${');
 
       buffer.writeln("    '$normalizedPath': '''");
-      buffer.writeln(content);
+      buffer.writeln(escapedContent);
       buffer.writeln("''',");
     }
     buffer.writeln('  };');

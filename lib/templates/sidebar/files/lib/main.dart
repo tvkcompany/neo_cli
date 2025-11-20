@@ -25,7 +25,7 @@ class MyApp extends ConsumerWidget {
     return NeoApp(
       title: "{{_PROJECT_NAME_}}",
       defaultThemeMode: NeoThemeMode.system,
-      routerConfig: neoRouter.config(navigatorObservers: () => [MyObserver(ref)]),
+      routerConfig: neoRouter.config(),
     );
   }
 }

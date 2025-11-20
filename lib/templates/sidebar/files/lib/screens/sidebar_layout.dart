@@ -1,6 +1,5 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:neo/neo.dart';
@@ -18,22 +17,24 @@ class SidebarLayout extends HookConsumerWidget {
     final router = AutoRouter.of(context);
 
     final neoSidebarCurrentStates = ref.watch(neoCurrentSidebarStatesProvider);
-    final activeItem = useState("Dashboard");
+    final currentRoute = router.currentPath.toLowerCase();
 
-    Widget buildSidebarButton(
-      String text, {
+    Widget buildSidebarButton({
+      required String text,
+      required String routePrefix,
+      required Function() onPressed,
       PhosphorIconData Function(PhosphorIconsStyle)? icon,
       String? badgeText,
       Color? badgeColor,
-      Function()? onPressed,
     }) {
+      final isActive = currentRoute.startsWith("/${routePrefix.toLowerCase()}");
       return NeoSidebarButton(
         label: text,
-        isActive: activeItem.value == text,
+        isActive: isActive,
         icon: icon,
         badgeText: badgeText,
         badgeColor: badgeColor,
-        onPressed: onPressed ?? () {},
+        onPressed: onPressed,
       );
     }
 
@@ -72,26 +73,22 @@ class SidebarLayout extends HookConsumerWidget {
                 child: Column(
                   children: [
                     buildSidebarButton(
-                      "Dashboard",
+                      text: "Dashboard",
+                      routePrefix: "dashboard",
                       icon: PhosphorIcons.squaresFour,
                       onPressed: () {
-                        if (activeItem.value != "Dashboard") {
-                          NeoHaptics.light();
-                          activeItem.value = "Dashboard";
-                          router.push(const DashboardRoute());
-                        }
+                        NeoHaptics.light();
+                        router.push(const DashboardRoute());
                       },
                     ),
                     Gap(theme.spacings.extraSmall),
                     buildSidebarButton(
-                      "Products",
+                      text: "Products",
+                      routePrefix: "products",
                       icon: PhosphorIcons.tag,
                       onPressed: () {
-                        if (activeItem.value != "Products") {
-                          NeoHaptics.light();
-                          activeItem.value = "Products";
-                          router.push(const ProductsRoute());
-                        }
+                        NeoHaptics.light();
+                        router.push(const ProductsRoute());
                       },
                     ),
                   ],
@@ -102,14 +99,12 @@ class SidebarLayout extends HookConsumerWidget {
         ),
         Gap(theme.spacings.extraSmall),
         buildSidebarButton(
-          "Settings",
+          text: "Settings",
+          routePrefix: "settings",
           icon: PhosphorIcons.gear,
           onPressed: () {
-            if (activeItem.value != "Settings") {
-              NeoHaptics.light();
-              activeItem.value = "Settings";
-              router.push(const SettingsRoute());
-            }
+            NeoHaptics.light();
+            router.push(const SettingsRoute());
           },
         ),
       ],

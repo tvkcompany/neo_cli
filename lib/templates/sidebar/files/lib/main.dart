@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:neo/neo.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import 'router/neo_router.dart';
+import 'router/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,16 +16,16 @@ void main() async {
 }
 
 class MyApp extends ConsumerWidget {
-  MyApp({super.key});
-
-  final neoRouter = NeoRouter();
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final appRouter = ref.watch(routerProvider);
+
     return NeoApp(
       title: "{{_PROJECT_NAME_}}",
       defaultThemeMode: NeoThemeMode.system,
-      routerConfig: neoRouter.config(),
+      routerConfig: appRouter.config(),
     );
   }
 }
